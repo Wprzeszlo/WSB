@@ -271,7 +271,6 @@ public sealed class MainForm : Form
         panel.Controls.Add(Button("Dodaj pracownika", AddEmployee));
         panel.Controls.Add(Button("Modyfikuj pracownika", EditEmployee));
         panel.Controls.Add(Button("Usuń pracownika", DeleteEmployee));
-        panel.Controls.Add(Button("Symuluj dostawę auta", SimulateDelivery));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(split);
         page.Controls.Add(panel);
@@ -687,16 +686,6 @@ public sealed class MainForm : Form
     {
         var removed = _store.Data.DeletedRecords.RemoveAll(record => record.RestoreUntil < DateTime.Now);
         MessageBox.Show($"Usunięto wygasłe rekordy z kosza: {removed}.", "Cars4Us");
-        RefreshBindings();
-    }
-
-    private void SimulateDelivery(object? sender, EventArgs e)
-    {
-        var vehicle = _store.Data.Vehicles.FirstOrDefault(v => v.StateName == "W transporcie");
-        if (vehicle is null) { MessageBox.Show("Brak auta w transporcie."); return; }
-        vehicle.Availability = VehicleAvailability.InShowroom;
-        vehicle.StateName = "Na ekspozycji";
-        _notifier.Publish($"Dostawa do salonu: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}.");
         RefreshBindings();
     }
 
