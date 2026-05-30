@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using static Cars4Us.DialogHelpers;
 
@@ -58,6 +59,18 @@ public sealed class VehicleEditorDialog : Form
         if (HasEmptyText(_vin, _brand, _model))
         {
             MessageBox.Show("Uzupełnij wszystkie pola tekstowe pojazdu: VIN, markę i model.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!IsValidVin(_vin.Text))
+        {
+            MessageBox.Show("VIN może zawierać tylko litery i cyfry oraz powinien mieć od 5 do 17 znaków.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!IsReasonableText(_brand.Text) || !IsReasonableText(_model.Text))
+        {
+            MessageBox.Show("Marka i model mogą zawierać litery, cyfry, spacje oraz znaki: - . /", "Cars4Us");
             e.Cancel = true;
             return;
         }
@@ -141,9 +154,21 @@ public sealed class CustomerEditorDialog : Form
             e.Cancel = true;
             return;
         }
-        if (!_email.Text.Contains('@') || !_email.Text.Contains('.'))
+        if (!IsPersonName(_name.Text))
         {
-            MessageBox.Show("Podaj poprawny adres e-mail.", "Cars4Us");
+            MessageBox.Show("Imię i nazwisko może zawierać tylko litery, spacje, myślnik i apostrof.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!IsDigitsOnly(_phone.Text) || _phone.Text.Trim().Length is < 7 or > 15)
+        {
+            MessageBox.Show("Telefon musi zawierać wyłącznie cyfry i mieć od 7 do 15 znaków.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!IsValidEmail(_email.Text))
+        {
+            MessageBox.Show("Podaj poprawny adres e-mail, np. wprzeszl@outlook.com.", "Cars4Us");
             e.Cancel = true;
         }
     }
@@ -181,6 +206,12 @@ public sealed class EmployeeEditorDialog : Form
         if (string.IsNullOrWhiteSpace(_name.Text))
         {
             MessageBox.Show("Podaj imię i nazwisko pracownika.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!IsPersonName(_name.Text))
+        {
+            MessageBox.Show("Imię i nazwisko pracownika może zawierać tylko litery, spacje, myślnik i apostrof.", "Cars4Us");
             e.Cancel = true;
             return;
         }
@@ -263,6 +294,12 @@ public sealed class TestDriveEditorDialog : Form
         if (string.IsNullOrWhiteSpace(_notes.Text))
         {
             MessageBox.Show("Uzupełnij notatki do jazdy próbnej.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!IsSafeFreeText(_notes.Text))
+        {
+            MessageBox.Show("Notatki nie mogą zawierać znaków < ani > i powinny mieć maksymalnie 250 znaków.", "Cars4Us");
             e.Cancel = true;
             return;
         }
@@ -437,6 +474,27 @@ internal static class DialogHelpers
 
     public static bool HasEmptyText(params TextBox[] textBoxes) =>
         textBoxes.Any(textBox => string.IsNullOrWhiteSpace(textBox.Text));
+
+    public static bool IsDigitsOnly(string value) =>
+        Regex.IsMatch(value.Trim(), @"^\d+$");
+
+    public static bool IsValidEmail(string value) =>
+        Regex.IsMatch(value.Trim(), @"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$");
+
+    public static bool IsValidVin(string value) =>
+        Regex.IsMatch(value.Trim(), @"^[A-Za-z0-9]{5,17}$");
+
+    public static bool IsPersonName(string value) =>
+        Regex.IsMatch(value.Trim(), @"^[\p{L}][\p{L}\s'-]{1,79}$");
+
+    public static bool IsReasonableText(string value) =>
+        Regex.IsMatch(value.Trim(), @"^[\p{L}0-9][\p{L}0-9\s.\-\/]{0,79}$");
+
+    public static bool IsSafeFreeText(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length is >= 3 and <= 250 && !trimmed.Contains('<') && !trimmed.Contains('>');
+    }
 
     public static void SetPrimaryButtonText(Control root, string text)
     {
