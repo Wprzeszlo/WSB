@@ -39,9 +39,21 @@ public sealed class VehicleEditorDialog : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (DialogResult != DialogResult.OK) return;
-        if (string.IsNullOrWhiteSpace(_vin.Text) || string.IsNullOrWhiteSpace(_brand.Text) || string.IsNullOrWhiteSpace(_model.Text))
+        if (HasEmptyText(_vin, _brand, _model))
         {
-            MessageBox.Show("Uzupełnij VIN, markę i model.", "Cars4Us");
+            MessageBox.Show("Uzupełnij wszystkie pola tekstowe pojazdu: VIN, markę i model.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (_engine.SelectedItem is null || _gearbox.SelectedItem is null || _availability.SelectedItem is null)
+        {
+            MessageBox.Show("Wybierz typ silnika, skrzynię biegów i dostępność.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (_price.Value <= 0)
+        {
+            MessageBox.Show("Cena bazowa musi być większa od zera.", "Cars4Us");
             e.Cancel = true;
         }
     }
@@ -97,9 +109,16 @@ public sealed class CustomerEditorDialog : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (DialogResult == DialogResult.OK && string.IsNullOrWhiteSpace(_name.Text))
+        if (DialogResult != DialogResult.OK) return;
+        if (HasEmptyText(_name, _phone, _email))
         {
-            MessageBox.Show("Podaj imię i nazwisko klienta.", "Cars4Us");
+            MessageBox.Show("Uzupełnij wszystkie dane klienta: imię i nazwisko, telefon oraz e-mail.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (!_email.Text.Contains('@') || !_email.Text.Contains('.'))
+        {
+            MessageBox.Show("Podaj poprawny adres e-mail.", "Cars4Us");
             e.Cancel = true;
         }
     }
@@ -125,9 +144,16 @@ public sealed class EmployeeEditorDialog : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (DialogResult == DialogResult.OK && string.IsNullOrWhiteSpace(_name.Text))
+        if (DialogResult != DialogResult.OK) return;
+        if (string.IsNullOrWhiteSpace(_name.Text))
         {
             MessageBox.Show("Podaj imię i nazwisko pracownika.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (_role.SelectedItem is null)
+        {
+            MessageBox.Show("Wybierz rolę pracownika.", "Cars4Us");
             e.Cancel = true;
         }
     }
@@ -186,6 +212,24 @@ public sealed class TestDriveEditorDialog : Form
         {
             MessageBox.Show("Wybierz auto testowe, klienta i handlowca.", "Cars4Us");
             e.Cancel = true;
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_notes.Text))
+        {
+            MessageBox.Show("Uzupełnij notatki do jazdy próbnej.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (_duration.Value <= 0)
+        {
+            MessageBox.Show("Czas jazdy musi być większy od zera.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (_start.Value <= DateTime.Now)
+        {
+            MessageBox.Show("Termin jazdy próbnej musi być w przyszłości.", "Cars4Us");
+            e.Cancel = true;
         }
     }
 }
@@ -225,6 +269,12 @@ public sealed class SaleEditorDialog : Form
         if (_vehicle.SelectedItem is null || _customer.SelectedItem is null || _salesperson.SelectedItem is null)
         {
             MessageBox.Show("Wybierz pojazd, klienta i handlowca.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (_financing.SelectedItem is null)
+        {
+            MessageBox.Show("Wybierz model finansowania.", "Cars4Us");
             e.Cancel = true;
         }
     }
@@ -292,4 +342,7 @@ internal static class DialogHelpers
         combo.DataSource = Enum.GetValues(enumType);
         return combo;
     }
+
+    public static bool HasEmptyText(params TextBox[] textBoxes) =>
+        textBoxes.Any(textBox => string.IsNullOrWhiteSpace(textBox.Text));
 }
