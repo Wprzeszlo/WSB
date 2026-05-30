@@ -168,7 +168,7 @@ public sealed class CustomerEditorDialog : Form
         }
         if (!IsValidEmail(_email.Text))
         {
-            MessageBox.Show("Podaj poprawny adres e-mail, np. wprzeszl@outlook.com.", "Cars4Us");
+            MessageBox.Show("Podaj poprawny adres e-mail, np. testowy@outlook.com.", "Cars4Us");
             e.Cancel = true;
         }
     }
