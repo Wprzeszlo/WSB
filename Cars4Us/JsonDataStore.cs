@@ -5,6 +5,7 @@ namespace Cars4Us;
 
 public sealed class JsonDataStore
 {
+    public static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
     public string FilePath { get; }
     public DealershipData Data { get; private set; }
 
@@ -19,6 +20,7 @@ public sealed class JsonDataStore
         var store = new JsonDataStore(filePath, new DealershipData());
         store.EnsureDatabase();
         store.Data = store.HasVehicles() ? store.Load() : Seed();
+        store.Data.DeletedRecords.RemoveAll(record => record.RestoreUntil < DateTime.Now);
         if (!store.HasVehicles()) store.Save();
         return store;
     }
@@ -35,6 +37,7 @@ public sealed class JsonDataStore
         SaveTestDrives(connection, transaction);
         SaveTransactions(connection, transaction);
         SaveNotifications(connection, transaction);
+        SaveDeletedRecords(connection, transaction);
         transaction.Commit();
     }
 
@@ -107,6 +110,14 @@ public sealed class JsonDataStore
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 SortOrder INTEGER NOT NULL,
                 Message TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS DeletedRecords (
+                Id TEXT PRIMARY KEY,
+                EntityType TEXT NOT NULL,
+                DisplayName TEXT NOT NULL,
+                DeletedAt TEXT NOT NULL,
+                PayloadJson TEXT NOT NULL,
+                DependenciesInfo TEXT NOT NULL
             );
             """);
     }
@@ -245,12 +256,30 @@ public sealed class JsonDataStore
             while (reader.Read()) data.Notifications.Add(reader.GetString(0));
         }
 
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT * FROM DeletedRecords ORDER BY DeletedAt DESC";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                data.DeletedRecords.Add(new DeletedRecord
+                {
+                    Id = Guid.Parse(reader.GetString(reader.GetOrdinal("Id"))),
+                    EntityType = reader.GetString(reader.GetOrdinal("EntityType")),
+                    DisplayName = reader.GetString(reader.GetOrdinal("DisplayName")),
+                    DeletedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("DeletedAt"))),
+                    PayloadJson = reader.GetString(reader.GetOrdinal("PayloadJson")),
+                    DependenciesInfo = reader.GetString(reader.GetOrdinal("DependenciesInfo"))
+                });
+            }
+        }
+
         return data;
     }
 
     private void ClearTables(SqliteConnection connection, SqliteTransaction transaction)
     {
-        foreach (var table in new[] { "Vehicles", "Customers", "Employees", "Options", "TestDrives", "TransactionsTable", "Notifications" })
+        foreach (var table in new[] { "Vehicles", "Customers", "Employees", "Options", "TestDrives", "TransactionsTable", "Notifications", "DeletedRecords" })
             Execute(connection, transaction, $"DELETE FROM {table}");
     }
 
@@ -262,7 +291,7 @@ public sealed class JsonDataStore
                 INSERT INTO Vehicles VALUES ($vin, $brand, $model, $engine, $gearbox, $mileage, $basePrice, $availability, $stateName, $selectedOptionIds, $isTestDriveCar)
                 """,
                 ("$vin", vehicle.Vin), ("$brand", vehicle.Brand), ("$model", vehicle.Model), ("$engine", vehicle.Engine.ToString()),
-                ("$gearbox", vehicle.Gearbox.ToString()), ("$mileage", vehicle.Mileage), ("$basePrice", vehicle.BasePrice),
+                ("$gearbox", vehicle.Gearbox.ToString()), ("$mileage", vehicle.Mileage), ("$basePrice", Convert.ToDouble(vehicle.BasePrice)),
                 ("$availability", vehicle.Availability.ToString()), ("$stateName", vehicle.StateName),
                 ("$selectedOptionIds", WriteList(vehicle.SelectedOptionIds)), ("$isTestDriveCar", vehicle.IsTestDriveCar ? 1 : 0));
         }
@@ -284,7 +313,7 @@ public sealed class JsonDataStore
         {
             Execute(connection, transaction, "INSERT INTO Employees VALUES ($id, $name, $role, $commissionBalance)",
                 ("$id", employee.Id.ToString()), ("$name", employee.Name), ("$role", employee.Role.ToString()),
-                ("$commissionBalance", employee.CommissionBalance));
+                ("$commissionBalance", Convert.ToDouble(employee.CommissionBalance)));
         }
     }
 
@@ -293,7 +322,7 @@ public sealed class JsonDataStore
         foreach (var option in Data.Options)
         {
             Execute(connection, transaction, "INSERT INTO Options VALUES ($id, $name, $category, $price, $requires, $excludes)",
-                ("$id", option.Id), ("$name", option.Name), ("$category", option.Category), ("$price", option.Price),
+                ("$id", option.Id), ("$name", option.Name), ("$category", option.Category), ("$price", Convert.ToDouble(option.Price)),
                 ("$requires", WriteList(option.Requires)), ("$excludes", WriteList(option.Excludes)));
         }
     }
@@ -318,7 +347,7 @@ public sealed class JsonDataStore
                 """,
                 ("$id", sale.Id.ToString()), ("$vehicleVin", sale.VehicleVin), ("$customerId", sale.CustomerId.ToString()),
                 ("$salespersonId", sale.SalespersonId.ToString()), ("$stage", sale.Stage.ToString()),
-                ("$financing", sale.Financing.ToString()), ("$finalPrice", sale.FinalPrice),
+                ("$financing", sale.Financing.ToString()), ("$finalPrice", Convert.ToDouble(sale.FinalPrice)),
                 ("$createdAt", sale.CreatedAt.ToString("O")), ("$history", WriteList(sale.History)));
         }
     }
@@ -327,6 +356,18 @@ public sealed class JsonDataStore
     {
         for (var i = 0; i < Data.Notifications.Count; i++)
             Execute(connection, transaction, "INSERT INTO Notifications (SortOrder, Message) VALUES ($sortOrder, $message)", ("$sortOrder", i), ("$message", Data.Notifications[i]));
+    }
+
+    private void SaveDeletedRecords(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        Data.DeletedRecords.RemoveAll(record => record.RestoreUntil < DateTime.Now);
+        foreach (var record in Data.DeletedRecords)
+        {
+            Execute(connection, transaction, "INSERT INTO DeletedRecords VALUES ($id, $entityType, $displayName, $deletedAt, $payloadJson, $dependenciesInfo)",
+                ("$id", record.Id.ToString()), ("$entityType", record.EntityType), ("$displayName", record.DisplayName),
+                ("$deletedAt", record.DeletedAt.ToString("O")), ("$payloadJson", record.PayloadJson),
+                ("$dependenciesInfo", record.DependenciesInfo));
+        }
     }
 
     private static void Execute(SqliteConnection connection, SqliteTransaction? transaction, string sql, params (string Name, object? Value)[] parameters)
@@ -338,8 +379,8 @@ public sealed class JsonDataStore
         command.ExecuteNonQuery();
     }
 
-    private static string WriteList<T>(List<T> values) => JsonSerializer.Serialize(values);
-    private static List<T> ReadList<T>(string json) => JsonSerializer.Deserialize<List<T>>(json) ?? new List<T>();
+    private static string WriteList<T>(List<T> values) => JsonSerializer.Serialize(values, JsonOptions);
+    private static List<T> ReadList<T>(string json) => JsonSerializer.Deserialize<List<T>>(json, JsonOptions) ?? new List<T>();
 
     private static DealershipData Seed()
     {
