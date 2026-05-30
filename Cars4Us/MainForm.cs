@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Drawing;
+using System.Diagnostics;
+using System.Net;
 using System.Text.Json;
 using System.Windows.Forms;
 
@@ -249,6 +251,7 @@ public sealed class MainForm : Form
         panel.Controls.Add(Button("Rozpocznij sprzedaż", StartSale));
         panel.Controls.Add(Button("Modyfikuj transakcję", EditSale));
         panel.Controls.Add(Button("Następny etap", AdvanceSale));
+        panel.Controls.Add(Button("Dokument wydania", GenerateReleaseDocument));
         panel.Controls.Add(Button("Wycofaj", WithdrawSale));
         panel.Controls.Add(Button("Usuń transakcję", DeleteSale));
         panel.Controls.Add(Button("Zapisz", Save));
@@ -607,6 +610,41 @@ public sealed class MainForm : Form
         RefreshBindings();
     }
 
+    private void GenerateReleaseDocument(object? sender, EventArgs e)
+    {
+        var transaction = SelectedTransaction();
+        if (transaction is null) return;
+        if (transaction.Stage != TransactionStage.Released)
+        {
+            MessageBox.Show("Dokument wydania można wygenerować dopiero dla transakcji na etapie „Wydane”.", "Cars4Us");
+            return;
+        }
+
+        var vehicle = _store.Data.Vehicles.FirstOrDefault(v => v.Vin == transaction.VehicleVin);
+        var customer = _store.Data.Customers.FirstOrDefault(c => c.Id == transaction.CustomerId);
+        var salesperson = _store.Data.Employees.FirstOrDefault(emp => emp.Id == transaction.SalespersonId);
+        if (vehicle is null || customer is null || salesperson is null)
+        {
+            MessageBox.Show("Brakuje danych pojazdu, klienta lub handlowca dla tej transakcji.", "Cars4Us");
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Zapisz dokument wydania",
+            Filter = "Dokument HTML (*.html)|*.html",
+            FileName = $"Dokument_wydania_{vehicle.Vin}_{DateTime.Now:yyyyMMdd}.html"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        File.WriteAllText(dialog.FileName, BuildReleaseDocumentHtml(transaction, vehicle, customer, salesperson));
+        _notifier.Publish($"Wygenerowano dokument wydania dla VIN {vehicle.Vin}.");
+        RefreshBindings();
+
+        if (MessageBox.Show("Dokument został zapisany. Otworzyć go teraz?", "Cars4Us", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+    }
+
     private void DeleteSale(object? sender, EventArgs e)
     {
         var transaction = SelectedTransaction();
@@ -810,6 +848,130 @@ public sealed class MainForm : Form
             $"{pricing.Description}\r\n" +
             $"Poglądowa cena z usługami: {(pricing.Amount + optionCost):N2} zł";
     }
+
+    private string BuildReleaseDocumentHtml(SaleTransaction transaction, Vehicle vehicle, Customer customer, Employee salesperson)
+    {
+        var documentNumber = $"DW/{transaction.CreatedAt:yyyy}/{transaction.Id.ToString()[..8].ToUpperInvariant()}";
+        var servicesRows = BuildReleaseServiceRows(transaction);
+        var html = """
+            <!doctype html>
+            <html lang="pl">
+            <head>
+              <meta charset="utf-8">
+              <title>Dokument wydania @@DOCUMENT_NUMBER@@</title>
+              <style>
+                body { font-family: Segoe UI, Arial, sans-serif; margin: 38px; color: #193038; }
+                h1 { margin: 0 0 4px; font-size: 28px; }
+                .muted { color: #6f6758; }
+                .header { display: flex; justify-content: space-between; border-bottom: 3px solid #ae9467; padding-bottom: 18px; margin-bottom: 24px; }
+                .box { border: 1px solid #d2bd8e; padding: 14px; margin: 12px 0; }
+                table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+                th, td { border: 1px solid #d2bd8e; padding: 9px; text-align: left; }
+                th { background: #f7eedb; }
+                .total { font-size: 22px; font-weight: 700; text-align: right; margin-top: 20px; }
+                .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 70px; }
+                .signature { border-top: 1px solid #193038; text-align: center; padding-top: 8px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div>
+                  <h1>Dokument wydania pojazdu</h1>
+                  <div class="muted">Numer: @@DOCUMENT_NUMBER@@</div>
+                </div>
+                <div>
+                  <strong>Cars4Us</strong><br>
+                  Salon samochodów old time<br>
+                  Data dokumentu: @@DOCUMENT_DATE@@
+                </div>
+              </div>
+
+              <div class="box">
+                <strong>Firma wydająca:</strong><br>
+                Cars4Us - salon samochodowy<br>
+                Sprzedawca: @@SALESPERSON@@ (@@SALESPERSON_ROLE@@)
+              </div>
+
+              <div class="box">
+                <strong>Kupujący:</strong><br>
+                @@CUSTOMER_NAME@@<br>
+                Telefon: @@CUSTOMER_PHONE@@<br>
+                E-mail: @@CUSTOMER_EMAIL@@
+              </div>
+
+              <table>
+                <tr><th colspan="2">Pojazd</th></tr>
+                <tr><td>VIN</td><td>@@VIN@@</td></tr>
+                <tr><td>Marka i model</td><td>@@VEHICLE_NAME@@</td></tr>
+                <tr><td>Typ silnika</td><td>@@ENGINE@@</td></tr>
+                <tr><td>Skrzynia biegów</td><td>@@GEARBOX@@</td></tr>
+                <tr><td>Przebieg</td><td>@@MILEAGE@@ km</td></tr>
+              </table>
+
+              <table>
+                <tr><th>Data sprzedaży</th><th>Data wydania</th><th>Finansowanie</th><th>Status</th></tr>
+                <tr>
+                  <td>@@SALE_DATE@@</td>
+                  <td>@@RELEASE_DATE@@</td>
+                  <td>@@FINANCING@@</td>
+                  <td>Wydane</td>
+                </tr>
+              </table>
+
+              <table>
+                <tr><th>Usługi dodatkowe</th><th>Kwota</th></tr>
+                @@SERVICES_ROWS@@
+              </table>
+
+              <div class="total">Kwota końcowa: @@FINAL_PRICE@@ zł</div>
+
+              <div class="signatures">
+                <div class="signature">Podpis kupującego</div>
+                <div class="signature">Podpis handlowca</div>
+              </div>
+            </body>
+            </html>
+            """;
+        return html
+            .Replace("@@DOCUMENT_NUMBER@@", H(documentNumber))
+            .Replace("@@DOCUMENT_DATE@@", DateTime.Now.ToString("dd.MM.yyyy HH:mm"))
+            .Replace("@@SALESPERSON@@", H(salesperson.Name))
+            .Replace("@@SALESPERSON_ROLE@@", H(LocalizeCellValue("Role", salesperson.Role) ?? salesperson.Role.ToString()))
+            .Replace("@@CUSTOMER_NAME@@", H(customer.Name))
+            .Replace("@@CUSTOMER_PHONE@@", H(customer.Phone))
+            .Replace("@@CUSTOMER_EMAIL@@", H(customer.Email))
+            .Replace("@@VIN@@", H(vehicle.Vin))
+            .Replace("@@VEHICLE_NAME@@", H($"{vehicle.Brand} {vehicle.Model}"))
+            .Replace("@@ENGINE@@", H(LocalizeCellValue("Engine", vehicle.Engine) ?? vehicle.Engine.ToString()))
+            .Replace("@@GEARBOX@@", H(LocalizeCellValue("Gearbox", vehicle.Gearbox) ?? vehicle.Gearbox.ToString()))
+            .Replace("@@MILEAGE@@", vehicle.Mileage.ToString("N0"))
+            .Replace("@@SALE_DATE@@", transaction.CreatedAt.ToString("dd.MM.yyyy HH:mm"))
+            .Replace("@@RELEASE_DATE@@", DateTime.Now.ToString("dd.MM.yyyy HH:mm"))
+            .Replace("@@FINANCING@@", H(LocalizeCellValue("Financing", transaction.Financing) ?? transaction.Financing.ToString()))
+            .Replace("@@SERVICES_ROWS@@", servicesRows)
+            .Replace("@@FINAL_PRICE@@", transaction.FinalPrice.ToString("N2"));
+    }
+
+    private string BuildReleaseServiceRows(SaleTransaction transaction)
+    {
+        if (transaction.SelectedOptionIds.Count == 0) return "<tr><td>Brak usług dodatkowych</td><td>0,00 zł</td></tr>";
+        var rows = new List<string>();
+        foreach (var id in transaction.SelectedOptionIds)
+        {
+            var option = _store.Data.Options.FirstOrDefault(o => o.Id == id);
+            if (option is null) continue;
+            var price = option.Id == TransportPricing.OptionId
+                ? TransportPricing.Calculate(transaction.TransportDistanceKm, transaction.TransportRouteKind)
+                : option.Price;
+            var name = option.Id == TransportPricing.OptionId
+                ? $"{option.Name} - {TransportPricing.Describe(transaction.TransportRouteKind)}, {transaction.TransportDistanceKm} km"
+                : option.Name;
+            rows.Add($"<tr><td>{H(name)}</td><td>{price:N2} zł</td></tr>");
+        }
+        return rows.Count == 0 ? "<tr><td>Brak usług dodatkowych</td><td>0,00 zł</td></tr>" : string.Join(Environment.NewLine, rows);
+    }
+
+    private static string H(string value) => WebUtility.HtmlEncode(value);
 
     private static string ServiceLine(CarOption option, int transportDistance, TransportRouteKind transportRoute)
     {
