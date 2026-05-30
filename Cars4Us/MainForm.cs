@@ -481,7 +481,6 @@ public sealed class MainForm : Form
             TransactionStage.Withdrawn => "Wycofane",
             _ => value.ToString()
         },
-        "IsTestDriveCar" when value is bool isTestDriveCar => isTestDriveCar ? "Tak" : "Nie",
         "CustomerId" when value is Guid customerId => _store.Data.Customers.FirstOrDefault(c => c.Id == customerId)?.Name ?? "Nieznany klient",
         "SalespersonId" when value is Guid salespersonId => _store.Data.Employees.FirstOrDefault(e => e.Id == salespersonId)?.Name ?? "Nieznany handlowiec",
         _ => null
