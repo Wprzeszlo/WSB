@@ -280,6 +280,41 @@ public sealed class SaleEditorDialog : Form
     }
 }
 
+public sealed class DeleteConfirmationDialog : Form
+{
+    public DeleteConfirmationDialog(string title, string displayName, IEnumerable<string> dependencies)
+    {
+        Text = title;
+        ConfigureDialogWindow(this);
+        Width = 560;
+
+        var panel = DialogLayout();
+        var message = new TextBox
+        {
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Width = 480,
+            Height = 180,
+            Text = BuildMessage(displayName, dependencies)
+        };
+        AddRow(panel, "Analiza", message);
+        AddButtons(panel, "Usuń");
+        Controls.Add(panel);
+    }
+
+    private static string BuildMessage(string displayName, IEnumerable<string> dependencies)
+    {
+        var dependencyList = dependencies.ToList();
+        var text = $"Wybrany rekord:\r\n{displayName}\r\n\r\n";
+        text += dependencyList.Count == 0
+            ? "Nie znaleziono powiązań z innymi danymi.\r\n\r\n"
+            : $"Znaleziono powiązania:\r\n- {string.Join("\r\n- ", dependencyList)}\r\n\r\n";
+        text += "Po akceptacji rekord zostanie przeniesiony do kosza i będzie można go przywrócić przez 31 dni.";
+        return text;
+    }
+}
+
 internal static class DialogHelpers
 {
     public static TableLayoutPanel DialogLayout()
