@@ -332,7 +332,7 @@ public sealed class MainForm : Form
         price = new FleetDiscountDecorator(price, _fleetBox?.Checked == true);
         if (_insuranceBox?.Checked == true) price = new InsuranceDecorator(price);
         if (_warrantyBox?.Checked == true) price = new ExtendedWarrantyDecorator(price);
-        var strategy = SelectedFinancing() switch
+        IFinancingStrategy strategy = SelectedFinancing() switch
         {
             FinancingKind.Leasing => new LeasingStrategy(),
             FinancingKind.Credit => new CreditStrategy(),
