@@ -4,3 +4,4 @@ obj/
 *.suo
 .vs/
 cars4us-data.json
+cars4us.db
