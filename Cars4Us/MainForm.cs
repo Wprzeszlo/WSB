@@ -56,7 +56,7 @@ public sealed class MainForm : Form
             ["BasePrice"] = "Cena bazowa",
             ["Availability"] = "Dostępność",
             ["StateName"] = "Status",
-            ["IsTestDriveCar"] = "Testowe"
+            ["IsTestDriveCar"] = "Auto testowe"
         }, "SelectedOptionIds");
         SetColumnWidths(_vehicleGrid, new()
         {
@@ -69,7 +69,7 @@ public sealed class MainForm : Form
             ["BasePrice"] = 120,
             ["Availability"] = 130,
             ["StateName"] = 120,
-            ["IsTestDriveCar"] = 85
+            ["IsTestDriveCar"] = 120
         });
 
         LocalizeGrid(_customerGrid, new()
@@ -422,7 +422,9 @@ public sealed class MainForm : Form
     {
         Dock = DockStyle.Fill,
         AutoGenerateColumns = true,
-        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells,
+        ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
+        ScrollBars = ScrollBars.Both,
         SelectionMode = DataGridViewSelectionMode.FullRowSelect,
         MultiSelect = false
     };
@@ -436,6 +438,7 @@ public sealed class MainForm : Form
                 if (headers.TryGetValue(column.DataPropertyName, out var header)) column.HeaderText = header;
                 if (hiddenColumns.Contains(column.DataPropertyName)) column.Visible = false;
             }
+            EnsureFullHeaderWidths(grid);
         };
         grid.CellFormatting += (_, e) =>
         {
@@ -456,9 +459,20 @@ public sealed class MainForm : Form
             {
                 if (!widths.TryGetValue(column.DataPropertyName, out var width)) continue;
                 column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                column.Width = width;
+                column.Width = Math.Max(width, column.MinimumWidth);
             }
         };
+    }
+
+    private static void EnsureFullHeaderWidths(DataGridView grid)
+    {
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            if (!column.Visible) continue;
+            var headerSize = TextRenderer.MeasureText(column.HeaderText, grid.ColumnHeadersDefaultCellStyle.Font ?? grid.Font);
+            column.MinimumWidth = headerSize.Width + 34;
+            if (column.Width < column.MinimumWidth) column.Width = column.MinimumWidth;
+        }
     }
 
     private string? LocalizeCellValue(string propertyName, object value) => propertyName switch
