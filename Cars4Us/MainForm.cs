@@ -16,6 +16,11 @@ public sealed class MainForm : Form
     private readonly BindingSource _transactions = new();
     private readonly BindingSource _notifications = new();
     private DataGridView _vehicleGrid = null!;
+    private DataGridView _customerGrid = null!;
+    private DataGridView _testDriveGrid = null!;
+    private DataGridView _transactionGrid = null!;
+    private DataGridView _employeeGrid = null!;
+    private DataGridView _notificationGrid = null!;
     private CheckedListBox _optionList = null!;
     private TextBox _pricingBox = null!;
     private ComboBox _financeBox = null!;
@@ -34,7 +39,65 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9F);
         BuildUi();
+        ConfigurePolishTables();
         RefreshBindings();
+    }
+
+    private void ConfigurePolishTables()
+    {
+        LocalizeGrid(_vehicleGrid, new()
+        {
+            ["Vin"] = "VIN",
+            ["Brand"] = "Marka",
+            ["Model"] = "Model",
+            ["Engine"] = "Typ silnika",
+            ["Gearbox"] = "Skrzynia biegów",
+            ["Mileage"] = "Przebieg",
+            ["BasePrice"] = "Cena bazowa",
+            ["Availability"] = "Dostępność",
+            ["StateName"] = "Status",
+            ["IsTestDriveCar"] = "Auto testowe"
+        }, "SelectedOptionIds");
+
+        LocalizeGrid(_customerGrid, new()
+        {
+            ["Name"] = "Imię i nazwisko",
+            ["Phone"] = "Telefon",
+            ["Email"] = "E-mail"
+        }, "Id", "PurchaseHistory");
+
+        LocalizeGrid(_testDriveGrid, new()
+        {
+            ["VehicleVin"] = "VIN pojazdu",
+            ["CustomerId"] = "Klient",
+            ["SalespersonId"] = "Handlowiec",
+            ["Start"] = "Początek",
+            ["End"] = "Koniec",
+            ["Notes"] = "Notatki"
+        }, "Id");
+
+        LocalizeGrid(_transactionGrid, new()
+        {
+            ["VehicleVin"] = "VIN pojazdu",
+            ["CustomerId"] = "Klient",
+            ["SalespersonId"] = "Handlowiec",
+            ["Stage"] = "Etap",
+            ["Financing"] = "Finansowanie",
+            ["FinalPrice"] = "Cena końcowa",
+            ["CreatedAt"] = "Utworzono"
+        }, "Id", "History");
+
+        LocalizeGrid(_employeeGrid, new()
+        {
+            ["Name"] = "Imię i nazwisko",
+            ["Role"] = "Rola",
+            ["CommissionBalance"] = "Prowizje"
+        }, "Id");
+
+        LocalizeGrid(_notificationGrid, new()
+        {
+            ["Message"] = "Powiadomienie"
+        });
     }
 
     private void BuildUi()
@@ -66,13 +129,13 @@ public sealed class MainForm : Form
     private TabPage BuildCrmTab()
     {
         var page = new TabPage("Klienci i CRM");
-        var grid = Grid();
-        grid.DataSource = _customers;
+        _customerGrid = Grid();
+        _customerGrid.DataSource = _customers;
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj klienta", AddCustomer));
         panel.Controls.Add(Button("Historia klienta", ShowCustomerHistory));
         panel.Controls.Add(Button("Zapisz", Save));
-        page.Controls.Add(grid);
+        page.Controls.Add(_customerGrid);
         page.Controls.Add(panel);
         return page;
     }
@@ -108,13 +171,13 @@ public sealed class MainForm : Form
     private TabPage BuildTestDriveTab()
     {
         var page = new TabPage("Jazdy próbne");
-        var grid = Grid();
-        grid.DataSource = _testDrives;
+        _testDriveGrid = Grid();
+        _testDriveGrid.DataSource = _testDrives;
         var panel = TopPanel();
         panel.Controls.Add(Button("Zarezerwuj jazdę", AddTestDrive));
         panel.Controls.Add(Button("Usuń rezerwację", DeleteTestDrive));
         panel.Controls.Add(Button("Zapisz", Save));
-        page.Controls.Add(grid);
+        page.Controls.Add(_testDriveGrid);
         page.Controls.Add(panel);
         return page;
     }
@@ -122,14 +185,14 @@ public sealed class MainForm : Form
     private TabPage BuildSalesTab()
     {
         var page = new TabPage("Sprzedaż");
-        var grid = Grid();
-        grid.DataSource = _transactions;
+        _transactionGrid = Grid();
+        _transactionGrid.DataSource = _transactions;
         var panel = TopPanel();
         panel.Controls.Add(Button("Rozpocznij sprzedaż", StartSale));
         panel.Controls.Add(Button("Następny etap", AdvanceSale));
         panel.Controls.Add(Button("Wycofaj", WithdrawSale));
         panel.Controls.Add(Button("Zapisz", Save));
-        page.Controls.Add(grid);
+        page.Controls.Add(_transactionGrid);
         page.Controls.Add(panel);
         return page;
     }
@@ -138,12 +201,12 @@ public sealed class MainForm : Form
     {
         var page = new TabPage("Kadra i powiadomienia");
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 580 };
-        var employeesGrid = Grid();
-        employeesGrid.DataSource = _employees;
-        var notificationGrid = Grid();
-        notificationGrid.DataSource = _notifications;
-        split.Panel1.Controls.Add(employeesGrid);
-        split.Panel2.Controls.Add(notificationGrid);
+        _employeeGrid = Grid();
+        _employeeGrid.DataSource = _employees;
+        _notificationGrid = Grid();
+        _notificationGrid.DataSource = _notifications;
+        split.Panel1.Controls.Add(_employeeGrid);
+        split.Panel2.Controls.Add(_notificationGrid);
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj pracownika", AddEmployee));
         panel.Controls.Add(Button("Symuluj dostawę auta", SimulateDelivery));
@@ -160,7 +223,7 @@ public sealed class MainForm : Form
         _employees.DataSource = new BindingList<Employee>(_store.Data.Employees);
         _testDrives.DataSource = new BindingList<TestDrive>(_store.Data.TestDrives);
         _transactions.DataSource = new BindingList<SaleTransaction>(_store.Data.Transactions);
-        _notifications.DataSource = new BindingList<string>(_store.Data.Notifications);
+        _notifications.DataSource = new BindingList<NotificationRow>(_store.Data.Notifications.Select(message => new NotificationRow { Message = message }).ToList());
         _optionList.Items.Clear();
         foreach (var option in _store.Data.Options) _optionList.Items.Add(option, false);
         RecalculateConfiguration();
@@ -351,6 +414,79 @@ public sealed class MainForm : Form
         MultiSelect = false
     };
 
+    private void LocalizeGrid(DataGridView grid, Dictionary<string, string> headers, params string[] hiddenColumns)
+    {
+        grid.DataBindingComplete += (_, _) =>
+        {
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                if (headers.TryGetValue(column.DataPropertyName, out var header)) column.HeaderText = header;
+                if (hiddenColumns.Contains(column.DataPropertyName)) column.Visible = false;
+            }
+        };
+        grid.CellFormatting += (_, e) =>
+        {
+            if (e.Value is null || e.ColumnIndex < 0) return;
+            var propertyName = grid.Columns[e.ColumnIndex].DataPropertyName;
+            var localized = LocalizeCellValue(propertyName, e.Value);
+            if (localized is null) return;
+            e.Value = localized;
+            e.FormattingApplied = true;
+        };
+    }
+
+    private string? LocalizeCellValue(string propertyName, object value) => propertyName switch
+    {
+        "Engine" when value is EngineType engine => engine switch
+        {
+            EngineType.Petrol => "Benzynowy",
+            EngineType.Diesel => "Diesel",
+            EngineType.Hybrid => "Hybrydowy",
+            EngineType.Electric => "Elektryczny",
+            _ => value.ToString()
+        },
+        "Gearbox" when value is Gearbox gearbox => gearbox switch
+        {
+            Gearbox.Manual => "Manualna",
+            Gearbox.Automatic => "Automatyczna",
+            _ => value.ToString()
+        },
+        "Availability" when value is VehicleAvailability availability => availability switch
+        {
+            VehicleAvailability.InShowroom => "W salonie",
+            VehicleAvailability.OnOrder => "Na zamówienie",
+            _ => value.ToString()
+        },
+        "Role" when value is EmployeeRole role => role switch
+        {
+            EmployeeRole.Salesperson => "Handlowiec",
+            EmployeeRole.Manager => "Manager",
+            EmployeeRole.ServiceTechnician => "Serwisant",
+            _ => value.ToString()
+        },
+        "Financing" when value is FinancingKind financing => financing switch
+        {
+            FinancingKind.Cash => "Gotówka",
+            FinancingKind.Leasing => "Leasing",
+            FinancingKind.Credit => "Kredyt",
+            _ => value.ToString()
+        },
+        "Stage" when value is TransactionStage stage => stage switch
+        {
+            TransactionStage.Reserved => "Rezerwacja",
+            TransactionStage.CreditVerification => "Weryfikacja kredytowa",
+            TransactionStage.Insurance => "Ubezpieczenie",
+            TransactionStage.ReadyToRelease => "Gotowe do wydania",
+            TransactionStage.Released => "Wydane",
+            TransactionStage.Withdrawn => "Wycofane",
+            _ => value.ToString()
+        },
+        "IsTestDriveCar" when value is bool isTestDriveCar => isTestDriveCar ? "Tak" : "Nie",
+        "CustomerId" when value is Guid customerId => _store.Data.Customers.FirstOrDefault(c => c.Id == customerId)?.Name ?? "Nieznany klient",
+        "SalespersonId" when value is Guid salespersonId => _store.Data.Employees.FirstOrDefault(e => e.Id == salespersonId)?.Name ?? "Nieznany handlowiec",
+        _ => null
+    };
+
     private static FlowLayoutPanel TopPanel() => new()
     {
         Dock = DockStyle.Top,
@@ -380,5 +516,10 @@ public sealed class MainForm : Form
     {
         _store.Save();
         MessageBox.Show($"Zapisano dane do pliku:\r\n{_store.FilePath}", "Cars4Us");
+    }
+
+    private sealed class NotificationRow
+    {
+        public string Message { get; set; } = "";
     }
 }
