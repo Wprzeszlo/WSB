@@ -45,7 +45,7 @@ public sealed class MainForm : Form
         BuildUi();
         ConfigurePolishTables();
         RefreshBindings();
-        BeginInvoke((Action)ResizeWindowToContent);
+        Shown += (_, _) => ResizeWindowToContent();
     }
 
     private void ConfigurePolishTables()
