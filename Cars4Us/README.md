@@ -11,7 +11,7 @@ dotnet build
 dotnet run
 ```
 
-Dane zapisują się lokalnie do pliku `cars4us-data.json` obok pliku wykonywalnego.
+Dane zapisują się lokalnie do darmowej bazy SQLite `cars4us.db` obok pliku wykonywalnego.
 
 ## Zakres funkcjonalny
 
@@ -23,6 +23,7 @@ Dane zapisują się lokalnie do pliku `cars4us-data.json` obok pliku wykonywalne
 - Dependency Engine: mediator reguł wymagań i wykluczeń opcji.
 - Pricing Pipeline: strategia finansowania oraz dekoratory ceny.
 - Finalizacja i wycofanie transakcji: Command + Memento przywraca status auta i prowizje.
+- Warstwa danych: baza SQLite z automatycznym zapisem przy zamknięciu programu.
 
 ## Zastosowane wzorce projektowe
 
