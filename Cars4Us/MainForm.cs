@@ -198,6 +198,7 @@ public sealed class MainForm : Form
         var page = new TabPage("Pakiet usług");
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 380 };
         _optionCatalog = new ListBox { Dock = DockStyle.Fill };
+        _optionCatalog.SelectedIndexChanged += (_, _) => ShowServiceCatalogInfo();
         _pricingBox = new TextBox { Multiline = true, Dock = DockStyle.Fill, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
         split.Panel1.Controls.Add(_optionCatalog);
         split.Panel2.Controls.Add(_pricingBox);
@@ -747,14 +748,41 @@ public sealed class MainForm : Form
     private void ShowServiceCatalogInfo()
     {
         if (_pricingBox is null) return;
+        var option = _optionCatalog?.SelectedItem as CarOption;
+        var vehicle = SelectedVehicle();
+        var quote = vehicle is null
+            ? "Wybierz pojazd w zakładce „Pojazdy”, aby zobaczyć poglądową cenę z usługą."
+            : BuildInformationalServiceQuote(vehicle, option);
+
         _pricingBox.Text =
             "Katalog usług old time\r\n\r\n" +
-            "Ten widok jest wyłącznie informacyjny. Zaznaczanie usług i naliczanie opłat odbywa się dopiero w konfiguratorze sprzedaży po kliknięciu „Rozpocznij sprzedaż”.\r\n\r\n" +
+            "Ten widok jest wyłącznie informacyjny. Kwoty poniżej pomagają porównać usługi, ale nie są zapisywane i nie wpływają na proces sprzedaży.\r\n\r\n" +
+            quote + "\r\n\r\n" +
             "Reguły przykładowe:\r\n" +
             "- Wymiana oleju i filtrów wymaga przeglądu klasyka.\r\n" +
             "- Pakiet garażowania wymaga konserwacji podwozia.\r\n" +
             "- Przygotowanie do wystawy wymaga detailingu wnętrza i polerowania lakieru.\r\n" +
             "- Transport lawetą wyklucza pakiet garażowania.";
+    }
+
+    private string BuildInformationalServiceQuote(Vehicle vehicle, CarOption? option)
+    {
+        var pricing = CalculatePrice(vehicle, FinancingKind.Cash);
+        var optionCost = option?.Price ?? 0m;
+        var optionLine = option is null
+            ? "Wybrana usługa: brak"
+            : $"Wybrana usługa: {option.Name}\r\nKoszt usługi: {option.Price:N2} zł";
+        var dependencies = option is null
+            ? ""
+            : $"\r\nWymaga: {ServiceNames(option.Requires)}\r\nWyklucza: {ServiceNames(option.Excludes)}";
+
+        return
+            $"Auto: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}\r\n" +
+            optionLine +
+            dependencies + "\r\n\r\n" +
+            $"Cena bazowa: {vehicle.BasePrice:N2} zł\r\n" +
+            $"{pricing.Description}\r\n" +
+            $"Poglądowa cena z usługą: {(pricing.Amount + optionCost):N2} zł";
     }
 
     private OptionResult ValidateServiceOptions(Vehicle vehicle, IEnumerable<string> selectedIds)
