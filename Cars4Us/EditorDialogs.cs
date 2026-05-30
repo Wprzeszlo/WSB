@@ -337,6 +337,7 @@ public sealed class SaleEditorDialog : Form
         ConfigureDialogWindow(this);
         LocalizeCombo(_financing, LocalizeEnumValue);
         LocalizeCombo(_transportRoute, LocalizeEnumValue);
+        _transportDistance.ValueChanged += (_, _) => EnsureTransportRouteMatchesDistance();
         var vehicleList = vehicles.Where(v => VehicleStateFactory.From(v.StateName).CanReserve || v.Vin == transaction?.VehicleVin).ToList();
         var customerList = customers.ToList();
         var salespersonList = employees.Where(e => e.Role == EmployeeRole.Salesperson || e.Id == transaction?.SalespersonId).ToList();
@@ -399,7 +400,21 @@ public sealed class SaleEditorDialog : Form
         {
             MessageBox.Show("Podaj dystans lawety większy od zera.", "Cars4Us");
             e.Cancel = true;
+            return;
         }
+        if (SelectedOptionIds.Contains(TransportPricing.OptionId) &&
+            TransportRouteKind == TransportRouteKind.PolandUpTo300Km &&
+            _transportDistance.Value > 300)
+        {
+            MessageBox.Show("Dla dystansu powyżej 300 km wybierz trasę: Polska powyżej 300 km.", "Cars4Us");
+            e.Cancel = true;
+        }
+    }
+
+    private void EnsureTransportRouteMatchesDistance()
+    {
+        if (_transportDistance.Value > 300 && _transportRoute.SelectedItem is TransportRouteKind.PolandUpTo300Km)
+            _transportRoute.SelectedItem = TransportRouteKind.PolandOver300Km;
     }
 }
 

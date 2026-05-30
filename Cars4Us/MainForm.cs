@@ -208,7 +208,11 @@ public sealed class MainForm : Form
         _catalogTransportRoute.Format += (_, e) => { if (e.ListItem is TransportRouteKind route) e.Value = TransportPricing.Describe(route); };
         _catalogTransportRoute.SelectedIndexChanged += (_, _) => ShowServiceCatalogInfo();
         _catalogTransportDistance = new NumericUpDown { Minimum = 1, Maximum = 5000, Value = 100, Width = 90 };
-        _catalogTransportDistance.ValueChanged += (_, _) => ShowServiceCatalogInfo();
+        _catalogTransportDistance.ValueChanged += (_, _) =>
+        {
+            EnsureCatalogTransportRouteMatchesDistance();
+            ShowServiceCatalogInfo();
+        };
         var transportPanel = TopPanel();
         transportPanel.Controls.Add(new Label { Text = "Trasa lawety:", AutoSize = true, Padding = new Padding(8, 8, 0, 0) });
         transportPanel.Controls.Add(_catalogTransportRoute);
@@ -781,6 +785,13 @@ public sealed class MainForm : Form
             "- Wymiana oleju i filtrów wymaga przeglądu klasyka.\r\n" +
             "- Przygotowanie do wystawy wymaga detailingu wnętrza i polerowania lakieru.\r\n" +
             "- Transport lawetą liczony jest według dystansu i typu trasy.";
+    }
+
+    private void EnsureCatalogTransportRouteMatchesDistance()
+    {
+        if (_catalogTransportRoute is null || _catalogTransportDistance is null) return;
+        if (_catalogTransportDistance.Value > 300 && _catalogTransportRoute.SelectedItem is TransportRouteKind.PolandUpTo300Km)
+            _catalogTransportRoute.SelectedItem = TransportRouteKind.PolandOver300Km;
     }
 
     private string BuildInformationalServiceQuote(Vehicle vehicle, List<CarOption> options)
