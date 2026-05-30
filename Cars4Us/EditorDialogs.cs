@@ -472,13 +472,14 @@ internal static class DialogHelpers
 
     public static ComboBox CreateCombo(Type enumType)
     {
-        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, FormattingEnabled = true };
         combo.DataSource = Enum.GetValues(enumType);
         return combo;
     }
 
     public static void LocalizeCombo(ComboBox combo, Func<object, string> formatter)
     {
+        combo.FormattingEnabled = true;
         combo.Format += (_, e) =>
         {
             if (e.ListItem is not null) e.Value = formatter(e.ListItem);
