@@ -163,7 +163,7 @@ public sealed class MainForm : Form
 
     private TabPage BuildOptionsTab()
     {
-        var page = new TabPage("Konfigurator");
+        var page = new TabPage("Pakiet usług");
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 380 };
         _optionList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
         _optionList.ItemCheck += (_, _) => BeginInvoke((Action)RecalculateConfiguration);
@@ -182,7 +182,7 @@ public sealed class MainForm : Form
         top.Controls.Add(_fleetBox);
         top.Controls.Add(_insuranceBox);
         top.Controls.Add(_warrantyBox);
-        top.Controls.Add(Button("Zastosuj do auta", ApplyConfiguration));
+        top.Controls.Add(Button("Zastosuj pakiet", ApplyConfiguration));
         split.Panel2.Controls.Add(_pricingBox);
         split.Panel2.Controls.Add(top);
         page.Controls.Add(split);
@@ -505,7 +505,7 @@ public sealed class MainForm : Form
         if (vehicle is null) return;
         var result = ValidateSelectedOptions(vehicle);
         vehicle.SelectedOptionIds = result.SelectedIds;
-        _notifier.Publish($"Zastosowano konfigurację dla VIN {vehicle.Vin}: {string.Join(", ", result.SelectedIds)}.");
+        _notifier.Publish($"Zastosowano pakiet usług dla VIN {vehicle.Vin}: {string.Join(", ", result.SelectedIds)}.");
         RefreshBindings();
     }
 
@@ -716,10 +716,10 @@ public sealed class MainForm : Form
         var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
         _pricingBox.Text =
             $"Auto: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}\r\n" +
-            $"Opcje po walidacji: {string.Join(", ", result.SelectedIds.DefaultIfEmpty("brak"))}\r\n" +
-            $"Koszt opcji: {optionCost:C0}\r\n\r\n" +
+            $"Usługi po walidacji: {string.Join(", ", result.SelectedIds.DefaultIfEmpty("brak"))}\r\n" +
+            $"Koszt usług: {optionCost:C0}\r\n\r\n" +
             $"{pricing.Description}\r\n\r\nCena końcowa: {pricing.Amount + optionCost:C0}\r\n\r\n" +
-            $"Reguły konfiguratora:\r\n{string.Join("\r\n", result.Messages.DefaultIfEmpty("Brak konfliktów."))}";
+            $"Reguły pakietu usług:\r\n{string.Join("\r\n", result.Messages.DefaultIfEmpty("Brak konfliktów."))}";
     }
 
     private OptionResult ValidateSelectedOptions(Vehicle vehicle)

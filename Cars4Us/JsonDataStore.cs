@@ -20,6 +20,7 @@ public sealed class JsonDataStore
         var store = new JsonDataStore(filePath, new DealershipData());
         store.EnsureDatabase();
         store.Data = store.HasVehicles() ? store.Load() : Seed();
+        ApplyClassicServiceCatalog(store.Data);
         store.Data.DeletedRecords.RemoveAll(record => record.RestoreUntil < DateTime.Now);
         if (!store.HasVehicles()) store.Save();
         return store;
@@ -385,24 +386,14 @@ public sealed class JsonDataStore
     private static DealershipData Seed()
     {
         var data = new DealershipData();
-        data.Options.AddRange(new[]
-        {
-            new CarOption { Id = "safety", Name = "Pakiet bezpieczeństwa", Category = "Pakiety", Price = 8200 },
-            new CarOption { Id = "multimedia", Name = "Multimedia premium", Category = "Multimedia", Price = 6500 },
-            new CarOption { Id = "leather", Name = "Skórzana tapicerka", Category = "Komfort", Price = 9400, Requires = new() { "heated" } },
-            new CarOption { Id = "heated", Name = "Podgrzewane fotele", Category = "Komfort", Price = 2800 },
-            new CarOption { Id = "manual", Name = "Manualna skrzynia sportowa", Category = "Napęd", Price = 1800, Excludes = new() { "ev-pack" } },
-            new CarOption { Id = "ev-pack", Name = "Pakiet elektryczny", Category = "Napęd", Price = 12000, Excludes = new() { "manual" } },
-            new CarOption { Id = "wheels", Name = "Felgi szprychowe 19 cali", Category = "Wygląd", Price = 5100 },
-            new CarOption { Id = "ceramic", Name = "Powłoka ceramiczna", Category = "Usługi", Price = 3300 }
-        });
+        ApplyClassicServiceCatalog(data);
 
         data.Vehicles.AddRange(new[]
         {
-            new CarBuilder().Identity("OLD001VIN1970", "Ford", "Mustang Fastback").Technical(EngineType.Petrol, Gearbox.Manual, 84000).Price(245000).Availability(VehicleAvailability.InShowroom).Options("manual", "wheels").TestDriveCar().Build(),
-            new CarBuilder().Identity("OLD002VIN1963", "Chevrolet", "Corvette C2").Technical(EngineType.Petrol, Gearbox.Manual, 62000).Price(389000).Availability(VehicleAvailability.InShowroom).Options("leather").Build(),
-            new CarBuilder().Identity("NEW001VIN2026", "Volvo", "EX30").Technical(EngineType.Electric, Gearbox.Automatic, 0).Price(189900).Availability(VehicleAvailability.OnOrder).Options("ev-pack", "safety").Build(),
-            new CarBuilder().Identity("USE001VIN2018", "Mercedes", "E Coupe").Technical(EngineType.Diesel, Gearbox.Automatic, 93000).Price(142000).Availability(VehicleAvailability.InShowroom).Options("multimedia", "heated").TestDriveCar().Build()
+            new CarBuilder().Identity("OLD001VIN1970", "Ford", "Mustang Fastback").Technical(EngineType.Petrol, Gearbox.Manual, 84000).Price(245000).Availability(VehicleAvailability.InShowroom).Options("oil-filters", "carb-ignition", "paint-polish").TestDriveCar().Build(),
+            new CarBuilder().Identity("OLD002VIN1963", "Chevrolet", "Corvette C2").Technical(EngineType.Petrol, Gearbox.Manual, 62000).Price(389000).Availability(VehicleAvailability.InShowroom).Options("classic-inspection", "show-prep").Build(),
+            new CarBuilder().Identity("NEW001VIN2026", "Volvo", "EX30").Technical(EngineType.Electric, Gearbox.Automatic, 0).Price(189900).Availability(VehicleAvailability.OnOrder).Options("classic-inspection").Build(),
+            new CarBuilder().Identity("USE001VIN2018", "Mercedes", "E Coupe").Technical(EngineType.Diesel, Gearbox.Automatic, 93000).Price(142000).Availability(VehicleAvailability.InShowroom).Options("oil-filters", "interior-detail").TestDriveCar().Build()
         });
 
         data.Customers.AddRange(new[]
@@ -419,5 +410,51 @@ public sealed class JsonDataStore
         });
         data.Notifications.Add($"{DateTime.Now:g}: Utworzono przykładową bazę Cars4Us w SQLite.");
         return data;
+    }
+
+    private static void ApplyClassicServiceCatalog(DealershipData data)
+    {
+        var remap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["safety"] = "classic-inspection",
+            ["multimedia"] = "interior-detail",
+            ["leather"] = "upholstery-renovation",
+            ["heated"] = "fluids",
+            ["manual"] = "carb-ignition",
+            ["ev-pack"] = "electrical-diagnostics",
+            ["wheels"] = "paint-polish",
+            ["ceramic"] = "show-prep"
+        };
+
+        data.Options.Clear();
+        data.Options.AddRange(new[]
+        {
+            new CarOption { Id = "classic-inspection", Name = "Przegląd klasyka", Category = "Diagnostyka", Price = 450 },
+            new CarOption { Id = "oil-filters", Name = "Wymiana oleju i filtrów", Category = "Serwis mechaniczny", Price = 550 },
+            new CarOption { Id = "fluids", Name = "Wymiana płynów eksploatacyjnych", Category = "Serwis mechaniczny", Price = 650 },
+            new CarOption { Id = "carb-ignition", Name = "Regulacja gaźnika i zapłonu", Category = "Serwis mechaniczny", Price = 700 },
+            new CarOption { Id = "brake-adjust", Name = "Regulacja układu hamulcowego", Category = "Serwis mechaniczny", Price = 350 },
+            new CarOption { Id = "electrical-diagnostics", Name = "Diagnostyka elektryki klasycznej", Category = "Diagnostyka", Price = 450 },
+            new CarOption { Id = "interior-detail", Name = "Czyszczenie i detailing wnętrza", Category = "Detailing", Price = 550 },
+            new CarOption { Id = "paint-polish", Name = "Polerowanie lakieru", Category = "Detailing", Price = 1800 },
+            new CarOption { Id = "underbody-protection", Name = "Konserwacja podwozia", Category = "Renowacja", Price = 1600 },
+            new CarOption { Id = "upholstery-renovation", Name = "Renowacja tapicerki", Category = "Renowacja", Price = 900 },
+            new CarOption { Id = "chrome-renovation", Name = "Renowacja elementów chromowanych", Category = "Renowacja", Price = 1200 },
+            new CarOption { Id = "show-prep", Name = "Przygotowanie do wystawy", Category = "Pakiety", Price = 900, Requires = new() { "interior-detail", "paint-polish" } },
+            new CarOption { Id = "history-docs", Name = "Pakiet dokumentacji historycznej", Category = "Dokumentacja", Price = 700 },
+            new CarOption { Id = "expert-appraisal", Name = "Ekspertyza rzeczoznawcy", Category = "Dokumentacja", Price = 900 },
+            new CarOption { Id = "covered-transport", Name = "Transport lawetą", Category = "Logistyka", Price = 1000 },
+            new CarOption { Id = "garage-storage", Name = "Pakiet garażowania", Category = "Logistyka", Price = 600 }
+        });
+
+        var validIds = data.Options.Select(option => option.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var vehicle in data.Vehicles)
+        {
+            vehicle.SelectedOptionIds = vehicle.SelectedOptionIds
+                .Select(id => remap.TryGetValue(id, out var replacement) ? replacement : id)
+                .Where(validIds.Contains)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
     }
 }
