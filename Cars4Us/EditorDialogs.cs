@@ -21,6 +21,9 @@ public sealed class VehicleEditorDialog : Form
     {
         Text = "Nowe auto old time";
         ConfigureDialogWindow(this);
+        LocalizeCombo(_engine, LocalizeEnumValue);
+        LocalizeCombo(_gearbox, LocalizeEnumValue);
+        LocalizeCombo(_availability, LocalizeEnumValue);
         BuildForm("Dodaj pojazd");
         _brand.Text = "Porsche";
         _model.Text = "911 Classic";
@@ -183,6 +186,7 @@ public sealed class EmployeeEditorDialog : Form
     {
         Text = "Nowy pracownik";
         ConfigureDialogWindow(this);
+        LocalizeCombo(_role, LocalizeEnumValue);
         var panel = DialogLayout();
         AddRow(panel, "Imię i nazwisko", _name);
         AddRow(panel, "Rola", _role);
@@ -328,6 +332,7 @@ public sealed class SaleEditorDialog : Form
     {
         Text = "Rozpoczęcie sprzedaży";
         ConfigureDialogWindow(this);
+        LocalizeCombo(_financing, LocalizeEnumValue);
         var vehicleList = vehicles.Where(v => VehicleStateFactory.From(v.StateName).CanReserve || v.Vin == transaction?.VehicleVin).ToList();
         var customerList = customers.ToList();
         var salespersonList = employees.Where(e => e.Role == EmployeeRole.Salesperson || e.Id == transaction?.SalespersonId).ToList();
@@ -471,6 +476,33 @@ internal static class DialogHelpers
         combo.DataSource = Enum.GetValues(enumType);
         return combo;
     }
+
+    public static void LocalizeCombo(ComboBox combo, Func<object, string> formatter)
+    {
+        combo.Format += (_, e) =>
+        {
+            if (e.ListItem is not null) e.Value = formatter(e.ListItem);
+        };
+    }
+
+    public static string LocalizeEnumValue(object value) => value switch
+    {
+        EngineType.Petrol => "Benzynowy",
+        EngineType.Diesel => "Diesel",
+        EngineType.Hybrid => "Hybrydowy",
+        EngineType.Electric => "Elektryczny",
+        Gearbox.Manual => "Manualna",
+        Gearbox.Automatic => "Automatyczna",
+        VehicleAvailability.InShowroom => "W salonie",
+        VehicleAvailability.OnOrder => "Na zamówienie",
+        EmployeeRole.Salesperson => "Handlowiec",
+        EmployeeRole.Manager => "Manager",
+        EmployeeRole.ServiceTechnician => "Serwisant",
+        FinancingKind.Cash => "Gotówka",
+        FinancingKind.Leasing => "Leasing",
+        FinancingKind.Credit => "Kredyt",
+        _ => value.ToString() ?? ""
+    };
 
     public static bool HasEmptyText(params TextBox[] textBoxes) =>
         textBoxes.Any(textBox => string.IsNullOrWhiteSpace(textBox.Text));
