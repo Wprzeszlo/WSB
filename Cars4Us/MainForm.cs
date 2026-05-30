@@ -131,7 +131,13 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed };
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            DrawMode = TabDrawMode.OwnerDrawFixed,
+            ItemSize = new Size(150, 30),
+            SizeMode = TabSizeMode.Fixed
+        };
         tabs.DrawItem += DrawThemeTab;
         tabs.TabPages.Add(BuildVehiclesTab());
         tabs.TabPages.Add(BuildCrmTab());
@@ -974,6 +980,7 @@ public sealed class MainForm : Form
             AutoSize = true,
             Height = 30,
             Margin = new Padding(4),
+            Padding = new Padding(10, 2, 10, 2),
             FlatStyle = FlatStyle.Flat,
             BackColor = ThemeInk,
             ForeColor = ThemeCream
@@ -1025,6 +1032,14 @@ public sealed class MainForm : Form
             case CheckBox:
                 control.BackColor = ThemeCream;
                 control.ForeColor = ThemeInk;
+                break;
+            case Button button:
+                button.FlatStyle = FlatStyle.Flat;
+                button.BackColor = ThemeInk;
+                button.ForeColor = ThemeCream;
+                button.FlatAppearance.BorderColor = ThemeGold;
+                button.FlatAppearance.MouseOverBackColor = ThemeInkLight;
+                button.FlatAppearance.MouseDownBackColor = ThemeSelection;
                 break;
             case TextBox textBox:
                 textBox.BackColor = ThemeInk;
