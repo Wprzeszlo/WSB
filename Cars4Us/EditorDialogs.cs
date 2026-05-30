@@ -28,6 +28,22 @@ public sealed class VehicleEditorDialog : Form
         _availability.SelectedItem = VehicleAvailability.InShowroom;
     }
 
+    public VehicleEditorDialog(Vehicle vehicle)
+    {
+        Text = "Modyfikacja pojazdu";
+        ConfigureDialogWindow(this);
+        BuildForm("Zapisz zmiany");
+        _vin.Text = vehicle.Vin;
+        _brand.Text = vehicle.Brand;
+        _model.Text = vehicle.Model;
+        _engine.SelectedItem = vehicle.Engine;
+        _gearbox.SelectedItem = vehicle.Gearbox;
+        _mileage.Value = Math.Clamp(vehicle.Mileage, (int)_mileage.Minimum, (int)_mileage.Maximum);
+        _price.Value = Math.Clamp(vehicle.BasePrice, _price.Minimum, _price.Maximum);
+        _availability.SelectedItem = vehicle.Availability;
+        _testDrive.Checked = vehicle.IsTestDriveCar;
+    }
+
     public Vehicle Vehicle => new CarBuilder()
         .Identity(_vin.Text.Trim(), _brand.Text.Trim(), _model.Text.Trim())
         .Technical((EngineType)_engine.SelectedItem!, (Gearbox)_gearbox.SelectedItem!, (int)_mileage.Value)
@@ -105,6 +121,15 @@ public sealed class CustomerEditorDialog : Form
         Controls.Add(panel);
     }
 
+    public CustomerEditorDialog(Customer customer) : this()
+    {
+        Text = "Modyfikacja klienta";
+        SetPrimaryButtonText(this, "Zapisz zmiany");
+        _name.Text = customer.Name;
+        _phone.Text = customer.Phone;
+        _email.Text = customer.Email;
+    }
+
     public Customer Customer => new() { Name = _name.Text.Trim(), Phone = _phone.Text.Trim(), Email = _email.Text.Trim() };
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -140,6 +165,14 @@ public sealed class EmployeeEditorDialog : Form
         Controls.Add(panel);
     }
 
+    public EmployeeEditorDialog(Employee employee) : this()
+    {
+        Text = "Modyfikacja pracownika";
+        SetPrimaryButtonText(this, "Zapisz zmiany");
+        _name.Text = employee.Name;
+        _role.SelectedItem = employee.Role;
+    }
+
     public Employee Employee => new() { Name = _name.Text.Trim(), Role = (EmployeeRole)_role.SelectedItem! };
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -168,13 +201,16 @@ public sealed class TestDriveEditorDialog : Form
     private readonly NumericUpDown _duration = CreateNumber(15, 240, 60);
     private readonly TextBox _notes = CreateTextBox("Notatki");
 
-    public TestDriveEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees)
+    public TestDriveEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees, TestDrive? testDrive = null)
     {
         Text = "Rezerwacja jazdy próbnej";
         ConfigureDialogWindow(this);
-        _vehicle.DataSource = vehicles.Where(v => v.IsTestDriveCar).ToList();
-        _customer.DataSource = customers.ToList();
-        _salesperson.DataSource = employees.Where(e => e.Role == EmployeeRole.Salesperson).ToList();
+        var vehicleList = vehicles.Where(v => v.IsTestDriveCar || v.Vin == testDrive?.VehicleVin).ToList();
+        var customerList = customers.ToList();
+        var salespersonList = employees.Where(e => e.Role == EmployeeRole.Salesperson || e.Id == testDrive?.SalespersonId).ToList();
+        _vehicle.DataSource = vehicleList;
+        _customer.DataSource = customerList;
+        _salesperson.DataSource = salespersonList;
         _start.Value = DateTime.Now.AddDays(1).Date.AddHours(10);
 
         var panel = DialogLayout();
@@ -186,6 +222,16 @@ public sealed class TestDriveEditorDialog : Form
         AddRow(panel, "Notatki", _notes);
         AddButtons(panel, "Zarezerwuj");
         Controls.Add(panel);
+
+        if (testDrive is null) return;
+        Text = "Modyfikacja jazdy próbnej";
+        SetPrimaryButtonText(this, "Zapisz zmiany");
+        _vehicle.SelectedItem = vehicleList.FirstOrDefault(v => v.Vin == testDrive.VehicleVin);
+        _customer.SelectedItem = customerList.FirstOrDefault(c => c.Id == testDrive.CustomerId);
+        _salesperson.SelectedItem = salespersonList.FirstOrDefault(e => e.Id == testDrive.SalespersonId);
+        _start.Value = testDrive.Start;
+        _duration.Value = Math.Clamp((decimal)(testDrive.End - testDrive.Start).TotalMinutes, _duration.Minimum, _duration.Maximum);
+        _notes.Text = testDrive.Notes;
     }
 
     public TestDrive TestDrive
@@ -241,13 +287,16 @@ public sealed class SaleEditorDialog : Form
     private readonly ComboBox _salesperson = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _financing = CreateCombo(typeof(FinancingKind));
 
-    public SaleEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees)
+    public SaleEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees, SaleTransaction? transaction = null)
     {
         Text = "Rozpoczęcie sprzedaży";
         ConfigureDialogWindow(this);
-        _vehicle.DataSource = vehicles.Where(v => VehicleStateFactory.From(v.StateName).CanReserve).ToList();
-        _customer.DataSource = customers.ToList();
-        _salesperson.DataSource = employees.Where(e => e.Role == EmployeeRole.Salesperson).ToList();
+        var vehicleList = vehicles.Where(v => VehicleStateFactory.From(v.StateName).CanReserve || v.Vin == transaction?.VehicleVin).ToList();
+        var customerList = customers.ToList();
+        var salespersonList = employees.Where(e => e.Role == EmployeeRole.Salesperson || e.Id == transaction?.SalespersonId).ToList();
+        _vehicle.DataSource = vehicleList;
+        _customer.DataSource = customerList;
+        _salesperson.DataSource = salespersonList;
 
         var panel = DialogLayout();
         AddRow(panel, "Pojazd", _vehicle);
@@ -256,6 +305,14 @@ public sealed class SaleEditorDialog : Form
         AddRow(panel, "Finansowanie", _financing);
         AddButtons(panel, "Rozpocznij sprzedaż");
         Controls.Add(panel);
+
+        if (transaction is null) return;
+        Text = "Modyfikacja transakcji";
+        SetPrimaryButtonText(this, "Zapisz zmiany");
+        _vehicle.SelectedItem = vehicleList.FirstOrDefault(v => v.Vin == transaction.VehicleVin);
+        _customer.SelectedItem = customerList.FirstOrDefault(c => c.Id == transaction.CustomerId);
+        _salesperson.SelectedItem = salespersonList.FirstOrDefault(e => e.Id == transaction.SalespersonId);
+        _financing.SelectedItem = transaction.Financing;
     }
 
     public Vehicle Vehicle => (Vehicle)_vehicle.SelectedItem!;
@@ -380,4 +437,17 @@ internal static class DialogHelpers
 
     public static bool HasEmptyText(params TextBox[] textBoxes) =>
         textBoxes.Any(textBox => string.IsNullOrWhiteSpace(textBox.Text));
+
+    public static void SetPrimaryButtonText(Control root, string text)
+    {
+        foreach (Control control in root.Controls)
+        {
+            if (control is Button { DialogResult: DialogResult.OK } button)
+            {
+                button.Text = text;
+                return;
+            }
+            SetPrimaryButtonText(control, text);
+        }
+    }
 }

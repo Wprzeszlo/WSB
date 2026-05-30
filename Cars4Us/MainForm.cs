@@ -136,6 +136,7 @@ public sealed class MainForm : Form
         _vehicleGrid.DataSource = _vehicles;
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj auto old time", AddVehicle));
+        panel.Controls.Add(Button("Modyfikuj pojazd", EditVehicle));
         panel.Controls.Add(Button("Usuń pojazd", DeleteVehicle));
         panel.Controls.Add(Button("Zmień status", AdvanceVehicleState));
         panel.Controls.Add(Button("Zapisz", Save));
@@ -151,6 +152,7 @@ public sealed class MainForm : Form
         _customerGrid.DataSource = _customers;
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj klienta", AddCustomer));
+        panel.Controls.Add(Button("Modyfikuj klienta", EditCustomer));
         panel.Controls.Add(Button("Usuń klienta", DeleteCustomer));
         panel.Controls.Add(Button("Historia klienta", ShowCustomerHistory));
         panel.Controls.Add(Button("Zapisz", Save));
@@ -194,6 +196,7 @@ public sealed class MainForm : Form
         _testDriveGrid.DataSource = _testDrives;
         var panel = TopPanel();
         panel.Controls.Add(Button("Zarezerwuj jazdę", AddTestDrive));
+        panel.Controls.Add(Button("Modyfikuj jazdę", EditTestDrive));
         panel.Controls.Add(Button("Usuń rezerwację", DeleteTestDrive));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_testDriveGrid);
@@ -208,6 +211,7 @@ public sealed class MainForm : Form
         _transactionGrid.DataSource = _transactions;
         var panel = TopPanel();
         panel.Controls.Add(Button("Rozpocznij sprzedaż", StartSale));
+        panel.Controls.Add(Button("Modyfikuj transakcję", EditSale));
         panel.Controls.Add(Button("Następny etap", AdvanceSale));
         panel.Controls.Add(Button("Wycofaj", WithdrawSale));
         panel.Controls.Add(Button("Usuń transakcję", DeleteSale));
@@ -229,6 +233,7 @@ public sealed class MainForm : Form
         split.Panel2.Controls.Add(_notificationGrid);
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj pracownika", AddEmployee));
+        panel.Controls.Add(Button("Modyfikuj pracownika", EditEmployee));
         panel.Controls.Add(Button("Usuń pracownika", DeleteEmployee));
         panel.Controls.Add(Button("Symuluj dostawę auta", SimulateDelivery));
         panel.Controls.Add(Button("Zapisz", Save));
@@ -303,6 +308,36 @@ public sealed class MainForm : Form
         RefreshBindings();
     }
 
+    private void EditVehicle(object? sender, EventArgs e)
+    {
+        var vehicle = SelectedVehicle();
+        if (vehicle is null) return;
+        using var dialog = new VehicleEditorDialog(vehicle);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var updated = dialog.Vehicle;
+        if (_store.Data.Vehicles.Any(v => !ReferenceEquals(v, vehicle) && v.Vin.Equals(updated.Vin, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show("Pojazd o podanym VIN już istnieje.", "Cars4Us");
+            return;
+        }
+        if (!ConfirmModification("Modyfikacja pojazdu", vehicle.ToString())) return;
+
+        var oldVin = vehicle.Vin;
+        vehicle.Vin = updated.Vin;
+        vehicle.Brand = updated.Brand;
+        vehicle.Model = updated.Model;
+        vehicle.Engine = updated.Engine;
+        vehicle.Gearbox = updated.Gearbox;
+        vehicle.Mileage = updated.Mileage;
+        vehicle.BasePrice = updated.BasePrice;
+        vehicle.Availability = updated.Availability;
+        vehicle.IsTestDriveCar = updated.IsTestDriveCar;
+        foreach (var drive in _store.Data.TestDrives.Where(d => d.VehicleVin == oldVin)) drive.VehicleVin = vehicle.Vin;
+        foreach (var sale in _store.Data.Transactions.Where(t => t.VehicleVin == oldVin)) sale.VehicleVin = vehicle.Vin;
+        _notifier.Publish($"Zmodyfikowano pojazd: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}.");
+        RefreshBindings();
+    }
+
     private void DeleteVehicle(object? sender, EventArgs e)
     {
         var vehicle = SelectedVehicle();
@@ -341,6 +376,20 @@ public sealed class MainForm : Form
         MessageBox.Show($"Zakupy:\r\n{purchases}\r\n\r\nJazdy próbne:\r\n{string.Join("\r\n", drives.DefaultIfEmpty("Brak jazd."))}", customer.Name);
     }
 
+    private void EditCustomer(object? sender, EventArgs e)
+    {
+        if (_customers.Current is not Customer customer) return;
+        using var dialog = new CustomerEditorDialog(customer);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!ConfirmModification("Modyfikacja klienta", customer.ToString())) return;
+        var updated = dialog.Customer;
+        customer.Name = updated.Name;
+        customer.Phone = updated.Phone;
+        customer.Email = updated.Email;
+        _notifier.Publish($"Zmodyfikowano klienta: {customer.Name}.");
+        RefreshBindings();
+    }
+
     private void DeleteCustomer(object? sender, EventArgs e)
     {
         if (_customers.Current is not Customer customer) return;
@@ -366,6 +415,19 @@ public sealed class MainForm : Form
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         _store.Data.Employees.Add(dialog.Employee);
         _notifier.Publish($"Dodano pracownika: {dialog.Employee.Name}.");
+        RefreshBindings();
+    }
+
+    private void EditEmployee(object? sender, EventArgs e)
+    {
+        if (_employees.Current is not Employee employee) return;
+        using var dialog = new EmployeeEditorDialog(employee);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!ConfirmModification("Modyfikacja pracownika", employee.ToString())) return;
+        var updated = dialog.Employee;
+        employee.Name = updated.Name;
+        employee.Role = updated.Role;
+        _notifier.Publish($"Zmodyfikowano pracownika: {employee.Name}.");
         RefreshBindings();
     }
 
@@ -412,6 +474,29 @@ public sealed class MainForm : Form
             _notifier.Publish($"Anulowano jazdę próbną VIN {drive.VehicleVin}.");
             RefreshBindings();
         }
+    }
+
+    private void EditTestDrive(object? sender, EventArgs e)
+    {
+        if (_testDrives.Current is not TestDrive drive) return;
+        using var dialog = new TestDriveEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees, drive);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var updated = dialog.TestDrive;
+        var conflict = _store.Data.TestDrives.Any(d => d.Id != drive.Id && d.VehicleVin == updated.VehicleVin && updated.Start < d.End && updated.End > d.Start);
+        if (conflict)
+        {
+            MessageBox.Show("Wybrany termin koliduje z istniejącą jazdą próbną.", "Cars4Us");
+            return;
+        }
+        if (!ConfirmModification("Modyfikacja jazdy próbnej", $"VIN {drive.VehicleVin}, {drive.Start:g}")) return;
+        drive.VehicleVin = updated.VehicleVin;
+        drive.CustomerId = updated.CustomerId;
+        drive.SalespersonId = updated.SalespersonId;
+        drive.Start = updated.Start;
+        drive.End = updated.End;
+        drive.Notes = updated.Notes;
+        _notifier.Publish($"Zmodyfikowano jazdę próbną VIN {drive.VehicleVin}.");
+        RefreshBindings();
     }
 
     private void ApplyConfiguration(object? sender, EventArgs e)
@@ -483,6 +568,37 @@ public sealed class MainForm : Form
         RefreshBindings();
     }
 
+    private void EditSale(object? sender, EventArgs e)
+    {
+        var transaction = SelectedTransaction();
+        if (transaction is null) return;
+        using var dialog = new SaleEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees, transaction);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!ConfirmModification("Modyfikacja transakcji", $"VIN {transaction.VehicleVin}, {transaction.CreatedAt:g}")) return;
+
+        if (transaction.VehicleVin != dialog.Vehicle.Vin)
+        {
+            var oldVehicle = _store.Data.Vehicles.FirstOrDefault(v => v.Vin == transaction.VehicleVin);
+            if (oldVehicle is not null) oldVehicle.StateName = "Na ekspozycji";
+            dialog.Vehicle.StateName = "Zarezerwowane";
+        }
+
+        transaction.VehicleVin = dialog.Vehicle.Vin;
+        transaction.CustomerId = dialog.Customer.Id;
+        transaction.SalespersonId = dialog.Salesperson.Id;
+        transaction.Financing = dialog.Financing;
+        _financeBox.SelectedItem = dialog.Financing;
+        transaction.FinalPrice = CalculatePrice(dialog.Vehicle).Amount;
+        transaction.History.Add(new TransactionSnapshot
+        {
+            Stage = transaction.Stage,
+            VehicleState = dialog.Vehicle.StateName,
+            Description = "Modyfikacja danych transakcji"
+        });
+        _notifier.Publish($"Zmodyfikowano transakcję VIN {transaction.VehicleVin}.");
+        RefreshBindings();
+    }
+
     private void RestoreDeletedRecord(object? sender, EventArgs e)
     {
         var record = SelectedDeletedRecord();
@@ -528,6 +644,13 @@ public sealed class MainForm : Form
         using var dialog = new DeleteConfirmationDialog(title, displayName, dependencies);
         return dialog.ShowDialog(this) == DialogResult.OK;
     }
+
+    private bool ConfirmModification(string title, string displayName) =>
+        MessageBox.Show(
+            $"Wybrany rekord:\r\n{displayName}\r\n\r\nCzy na pewno zmodyfikować dane?",
+            title,
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question) == DialogResult.Yes;
 
     private void MoveToRecycleBin<T>(string entityType, string displayName, T payload, string dependenciesInfo)
     {
@@ -630,6 +753,10 @@ public sealed class MainForm : Form
         AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells,
         ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
         ScrollBars = ScrollBars.Both,
+        ReadOnly = true,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        EditMode = DataGridViewEditMode.EditProgrammatically,
         SelectionMode = DataGridViewSelectionMode.FullRowSelect,
         MultiSelect = false
     };
