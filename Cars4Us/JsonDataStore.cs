@@ -104,6 +104,8 @@ public sealed class JsonDataStore
                 Stage TEXT NOT NULL,
                 Financing TEXT NOT NULL,
                 SelectedOptionIds TEXT NOT NULL DEFAULT '[]',
+                TransportDistanceKm INTEGER NOT NULL DEFAULT 0,
+                TransportRouteKind TEXT NOT NULL DEFAULT 'PolandUpTo300Km',
                 FinalPrice REAL NOT NULL,
                 CreatedAt TEXT NOT NULL,
                 HistoryJson TEXT NOT NULL
@@ -123,6 +125,8 @@ public sealed class JsonDataStore
             );
             """);
         EnsureColumn(connection, "TransactionsTable", "SelectedOptionIds", "TEXT NOT NULL DEFAULT '[]'");
+        EnsureColumn(connection, "TransactionsTable", "TransportDistanceKm", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(connection, "TransactionsTable", "TransportRouteKind", "TEXT NOT NULL DEFAULT 'PolandUpTo300Km'");
     }
 
     private bool HasVehicles()
@@ -246,6 +250,8 @@ public sealed class JsonDataStore
                     Stage = Enum.Parse<TransactionStage>(reader.GetString(reader.GetOrdinal("Stage"))),
                     Financing = Enum.Parse<FinancingKind>(reader.GetString(reader.GetOrdinal("Financing"))),
                     SelectedOptionIds = ReadList<string>(reader.GetString(reader.GetOrdinal("SelectedOptionIds"))),
+                    TransportDistanceKm = reader.GetInt32(reader.GetOrdinal("TransportDistanceKm")),
+                    TransportRouteKind = Enum.Parse<TransportRouteKind>(reader.GetString(reader.GetOrdinal("TransportRouteKind"))),
                     FinalPrice = Convert.ToDecimal(reader.GetDouble(reader.GetOrdinal("FinalPrice"))),
                     CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("CreatedAt"))),
                     History = ReadList<TransactionSnapshot>(reader.GetString(reader.GetOrdinal("HistoryJson")))
@@ -348,12 +354,13 @@ public sealed class JsonDataStore
         {
             Execute(connection, transaction, """
                 INSERT INTO TransactionsTable
-                (Id, VehicleVin, CustomerId, SalespersonId, Stage, Financing, SelectedOptionIds, FinalPrice, CreatedAt, HistoryJson)
-                VALUES ($id, $vehicleVin, $customerId, $salespersonId, $stage, $financing, $selectedOptionIds, $finalPrice, $createdAt, $history)
+                (Id, VehicleVin, CustomerId, SalespersonId, Stage, Financing, SelectedOptionIds, TransportDistanceKm, TransportRouteKind, FinalPrice, CreatedAt, HistoryJson)
+                VALUES ($id, $vehicleVin, $customerId, $salespersonId, $stage, $financing, $selectedOptionIds, $transportDistanceKm, $transportRouteKind, $finalPrice, $createdAt, $history)
                 """,
                 ("$id", sale.Id.ToString()), ("$vehicleVin", sale.VehicleVin), ("$customerId", sale.CustomerId.ToString()),
                 ("$salespersonId", sale.SalespersonId.ToString()), ("$stage", sale.Stage.ToString()),
                 ("$financing", sale.Financing.ToString()), ("$selectedOptionIds", WriteList(sale.SelectedOptionIds)),
+                ("$transportDistanceKm", sale.TransportDistanceKm), ("$transportRouteKind", sale.TransportRouteKind.ToString()),
                 ("$finalPrice", Convert.ToDouble(sale.FinalPrice)),
                 ("$createdAt", sale.CreatedAt.ToString("O")), ("$history", WriteList(sale.History)));
         }
@@ -462,8 +469,7 @@ public sealed class JsonDataStore
             new CarOption { Id = "show-prep", Name = "Przygotowanie do wystawy", Category = "Pakiety", Price = 900, Requires = new() { "interior-detail", "paint-polish" } },
             new CarOption { Id = "history-docs", Name = "Pakiet dokumentacji historycznej", Category = "Dokumentacja", Price = 700 },
             new CarOption { Id = "expert-appraisal", Name = "Ekspertyza rzeczoznawcy", Category = "Dokumentacja", Price = 900 },
-            new CarOption { Id = "covered-transport", Name = "Transport lawetą", Category = "Logistyka", Price = 1000 },
-            new CarOption { Id = "garage-storage", Name = "Pakiet garażowania", Category = "Logistyka", Price = 600 }
+            new CarOption { Id = TransportPricing.OptionId, Name = "Transport lawetą", Category = "Logistyka", Price = 0 }
         });
 
         var validIds = data.Options.Select(option => option.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);

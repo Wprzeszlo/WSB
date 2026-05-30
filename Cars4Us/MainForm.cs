@@ -34,6 +34,8 @@ public sealed class MainForm : Form
     private DataGridView _deletedRecordGrid = null!;
     private CheckedListBox _optionCatalog = null!;
     private TextBox _pricingBox = null!;
+    private ComboBox _catalogTransportRoute = null!;
+    private NumericUpDown _catalogTransportDistance = null!;
 
     public MainForm(JsonDataStore store)
     {
@@ -109,6 +111,8 @@ public sealed class MainForm : Form
             ["Stage"] = "Etap",
             ["Financing"] = "Finansowanie",
             ["SelectedOptionIds"] = "Usługi",
+            ["TransportDistanceKm"] = "Dystans lawety",
+            ["TransportRouteKind"] = "Trasa lawety",
             ["FinalPrice"] = "Cena końcowa",
             ["CreatedAt"] = "Utworzono"
         }, "Id", "History");
@@ -200,7 +204,18 @@ public sealed class MainForm : Form
         _optionCatalog = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
         _optionCatalog.ItemCheck += (_, _) => BeginInvoke((Action)ShowServiceCatalogInfo);
         _pricingBox = new TextBox { Multiline = true, Dock = DockStyle.Fill, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
+        _catalogTransportRoute = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, DataSource = Enum.GetValues(typeof(TransportRouteKind)), FormattingEnabled = true };
+        _catalogTransportRoute.Format += (_, e) => { if (e.ListItem is TransportRouteKind route) e.Value = TransportPricing.Describe(route); };
+        _catalogTransportRoute.SelectedIndexChanged += (_, _) => ShowServiceCatalogInfo();
+        _catalogTransportDistance = new NumericUpDown { Minimum = 1, Maximum = 5000, Value = 100, Width = 90 };
+        _catalogTransportDistance.ValueChanged += (_, _) => ShowServiceCatalogInfo();
+        var transportPanel = TopPanel();
+        transportPanel.Controls.Add(new Label { Text = "Trasa lawety:", AutoSize = true, Padding = new Padding(8, 8, 0, 0) });
+        transportPanel.Controls.Add(_catalogTransportRoute);
+        transportPanel.Controls.Add(new Label { Text = "Dystans (km):", AutoSize = true, Padding = new Padding(8, 8, 0, 0) });
+        transportPanel.Controls.Add(_catalogTransportDistance);
         split.Panel1.Controls.Add(_optionCatalog);
+        split.Panel1.Controls.Add(transportPanel);
         split.Panel2.Controls.Add(_pricingBox);
         page.Controls.Add(split);
         return page;
@@ -547,16 +562,18 @@ public sealed class MainForm : Form
         var salesperson = dialog.Salesperson;
         var result = ValidateServiceOptions(vehicle, dialog.SelectedOptionIds);
         ShowServiceRuleMessages(result);
-        var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
+        var optionCost = CalculateServiceCost(result.SelectedIds, dialog.TransportDistanceKm, dialog.TransportRouteKind);
         var finalPrice = CalculatePrice(vehicle, dialog.Financing).Amount + optionCost;
         try
         {
             var transaction = _sales.ReserveAndStartSale(vehicle, customer, salesperson, dialog.Financing, result.SelectedIds, finalPrice);
+            transaction.TransportDistanceKm = result.SelectedIds.Contains(TransportPricing.OptionId) ? dialog.TransportDistanceKm : 0;
+            transaction.TransportRouteKind = dialog.TransportRouteKind;
             transaction.History.Add(new TransactionSnapshot
             {
                 Stage = transaction.Stage,
                 VehicleState = vehicle.StateName,
-                Description = $"Wybrane usługi: {ServiceNames(result.SelectedIds)}"
+                Description = $"Wybrane usługi: {ServiceNames(result.SelectedIds)}. {TransportDescription(result.SelectedIds, transaction.TransportDistanceKm, transaction.TransportRouteKind)}"
             });
             RefreshBindings();
         }
@@ -624,14 +641,16 @@ public sealed class MainForm : Form
         transaction.Financing = dialog.Financing;
         var result = ValidateServiceOptions(dialog.Vehicle, dialog.SelectedOptionIds);
         ShowServiceRuleMessages(result);
-        var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
+        var optionCost = CalculateServiceCost(result.SelectedIds, dialog.TransportDistanceKm, dialog.TransportRouteKind);
         transaction.SelectedOptionIds = result.SelectedIds;
+        transaction.TransportDistanceKm = result.SelectedIds.Contains(TransportPricing.OptionId) ? dialog.TransportDistanceKm : 0;
+        transaction.TransportRouteKind = dialog.TransportRouteKind;
         transaction.FinalPrice = CalculatePrice(dialog.Vehicle, dialog.Financing).Amount + optionCost;
         transaction.History.Add(new TransactionSnapshot
         {
             Stage = transaction.Stage,
             VehicleState = dialog.Vehicle.StateName,
-            Description = $"Modyfikacja danych transakcji. Usługi: {ServiceNames(result.SelectedIds)}"
+            Description = $"Modyfikacja danych transakcji. Usługi: {ServiceNames(result.SelectedIds)}. {TransportDescription(result.SelectedIds, transaction.TransportDistanceKm, transaction.TransportRouteKind)}"
         });
         _notifier.Publish($"Zmodyfikowano transakcję VIN {transaction.VehicleVin}.");
         RefreshBindings();
@@ -760,25 +779,27 @@ public sealed class MainForm : Form
             quote + "\r\n\r\n" +
             "Reguły przykładowe:\r\n" +
             "- Wymiana oleju i filtrów wymaga przeglądu klasyka.\r\n" +
-            "- Pakiet garażowania wymaga konserwacji podwozia.\r\n" +
             "- Przygotowanie do wystawy wymaga detailingu wnętrza i polerowania lakieru.\r\n" +
-            "- Transport lawetą wyklucza pakiet garażowania.";
+            "- Transport lawetą liczony jest według dystansu i typu trasy.";
     }
 
     private string BuildInformationalServiceQuote(Vehicle vehicle, List<CarOption> options)
     {
         var pricing = CalculatePrice(vehicle, FinancingKind.Cash);
-        var optionCost = options.Sum(option => option.Price);
         var selectedIds = options.Select(option => option.Id).ToList();
+        var transportDistance = (int)(_catalogTransportDistance?.Value ?? 0);
+        var transportRoute = _catalogTransportRoute?.SelectedItem is TransportRouteKind route ? route : TransportRouteKind.PolandUpTo300Km;
+        var normalized = ValidateServiceOptions(vehicle, selectedIds);
+        var optionCost = CalculateServiceCost(normalized.SelectedIds, transportDistance, transportRoute);
         var optionLine = options.Count == 0
             ? "Wybrana usługa: brak"
-            : $"Wybrane usługi:\r\n- {string.Join("\r\n- ", options.Select(option => $"{option.Name} ({option.Price:N2} zł)"))}\r\nKoszt usług: {optionCost:N2} zł";
+            : $"Wybrane usługi:\r\n- {string.Join("\r\n- ", options.Select(option => ServiceLine(option, transportDistance, transportRoute)))}\r\nKoszt usług: {optionCost:N2} zł";
         var dependencies = options.Count == 0
             ? ""
             : $"\r\nWymaga: {ServiceNames(options.SelectMany(option => option.Requires).Distinct())}\r\nWyklucza: {ServiceNames(options.SelectMany(option => option.Excludes).Distinct())}";
         var validation = options.Count == 0
             ? ""
-            : $"\r\nUsługi po regułach: {ServiceNames(ValidateServiceOptions(vehicle, selectedIds).SelectedIds)}";
+            : $"\r\nUsługi po regułach: {ServiceNames(normalized.SelectedIds)}";
 
         return
             $"Auto: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}\r\n" +
@@ -788,6 +809,32 @@ public sealed class MainForm : Form
             $"Cena bazowa: {vehicle.BasePrice:N2} zł\r\n" +
             $"{pricing.Description}\r\n" +
             $"Poglądowa cena z usługami: {(pricing.Amount + optionCost):N2} zł";
+    }
+
+    private static string ServiceLine(CarOption option, int transportDistance, TransportRouteKind transportRoute)
+    {
+        if (option.Id != TransportPricing.OptionId) return $"{option.Name} ({option.Price:N2} zł)";
+        var rate = TransportPricing.RateFor(transportRoute);
+        var cost = TransportPricing.Calculate(transportDistance, transportRoute);
+        return $"{option.Name} ({TransportPricing.Describe(transportRoute)}, {transportDistance} km x {rate:N2} zł/km = {cost:N2} zł)";
+    }
+
+    private decimal CalculateServiceCost(IEnumerable<string> selectedIds, int transportDistance, TransportRouteKind transportRoute)
+    {
+        var ids = selectedIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fixedCost = ids
+            .Where(id => id != TransportPricing.OptionId)
+            .Select(id => _store.Data.Options.First(o => o.Id == id).Price)
+            .Sum();
+        var transportCost = ids.Contains(TransportPricing.OptionId) ? TransportPricing.Calculate(transportDistance, transportRoute) : 0m;
+        return fixedCost + transportCost;
+    }
+
+    private static string TransportDescription(IEnumerable<string> selectedIds, int transportDistance, TransportRouteKind transportRoute)
+    {
+        return selectedIds.Contains(TransportPricing.OptionId)
+            ? $"Transport: {TransportPricing.Describe(transportRoute)}, {transportDistance} km, koszt {TransportPricing.Calculate(transportDistance, transportRoute):N2} zł."
+            : "Transport: brak.";
     }
 
     private OptionResult ValidateServiceOptions(Vehicle vehicle, IEnumerable<string> selectedIds)
@@ -975,6 +1022,8 @@ public sealed class MainForm : Form
         "BasePrice" when value is decimal basePrice => $"{basePrice:N2} zł",
         "Mileage" when value is int mileage => $"{mileage:N0} km",
         "SelectedOptionIds" when value is List<string> optionIds => ServiceNames(optionIds),
+        "TransportRouteKind" when value is TransportRouteKind route => TransportPricing.Describe(route),
+        "TransportDistanceKm" when value is int distance => distance > 0 ? $"{distance:N0} km" : "brak",
         _ => null
     };
 

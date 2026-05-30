@@ -328,12 +328,15 @@ public sealed class SaleEditorDialog : Form
     private readonly ComboBox _salesperson = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _financing = CreateCombo(typeof(FinancingKind));
     private readonly CheckedListBox _serviceOptions = new() { CheckOnClick = true, Height = 150 };
+    private readonly ComboBox _transportRoute = CreateCombo(typeof(TransportRouteKind));
+    private readonly NumericUpDown _transportDistance = CreateNumber(1, 5000, 100);
 
     public SaleEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees, IEnumerable<CarOption> options, SaleTransaction? transaction = null)
     {
         Text = "Rozpoczęcie sprzedaży";
         ConfigureDialogWindow(this);
         LocalizeCombo(_financing, LocalizeEnumValue);
+        LocalizeCombo(_transportRoute, LocalizeEnumValue);
         var vehicleList = vehicles.Where(v => VehicleStateFactory.From(v.StateName).CanReserve || v.Vin == transaction?.VehicleVin).ToList();
         var customerList = customers.ToList();
         var salespersonList = employees.Where(e => e.Role == EmployeeRole.Salesperson || e.Id == transaction?.SalespersonId).ToList();
@@ -349,6 +352,8 @@ public sealed class SaleEditorDialog : Form
         AddRow(panel, "Handlowiec", _salesperson);
         AddRow(panel, "Finansowanie", _financing);
         AddRow(panel, "Pakiet usług", _serviceOptions);
+        AddRow(panel, "Trasa lawety", _transportRoute);
+        AddRow(panel, "Dystans lawety (km)", _transportDistance);
         AddButtons(panel, "Rozpocznij sprzedaż");
         Controls.Add(panel);
 
@@ -359,6 +364,8 @@ public sealed class SaleEditorDialog : Form
         SelectComboItem(_customer, customerList.FirstOrDefault(c => c.Id == transaction.CustomerId));
         SelectComboItem(_salesperson, salespersonList.FirstOrDefault(e => e.Id == transaction.SalespersonId));
         SelectEnumValue(_financing, transaction.Financing);
+        SelectEnumValue(_transportRoute, transaction.TransportRouteKind);
+        if (transaction.TransportDistanceKm > 0) _transportDistance.Value = Math.Min(_transportDistance.Maximum, transaction.TransportDistanceKm);
         for (var i = 0; i < _serviceOptions.Items.Count; i++)
         {
             if (_serviceOptions.Items[i] is CarOption option && transaction.SelectedOptionIds.Contains(option.Id)) _serviceOptions.SetItemChecked(i, true);
@@ -370,6 +377,8 @@ public sealed class SaleEditorDialog : Form
     public Employee Salesperson => (Employee)_salesperson.SelectedItem!;
     public FinancingKind Financing => (FinancingKind)_financing.SelectedItem!;
     public List<string> SelectedOptionIds => _serviceOptions.CheckedItems.Cast<CarOption>().Select(option => option.Id).ToList();
+    public TransportRouteKind TransportRouteKind => (TransportRouteKind)_transportRoute.SelectedItem!;
+    public int TransportDistanceKm => (int)_transportDistance.Value;
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -383,6 +392,12 @@ public sealed class SaleEditorDialog : Form
         if (_financing.SelectedItem is null)
         {
             MessageBox.Show("Wybierz model finansowania.", "Cars4Us");
+            e.Cancel = true;
+            return;
+        }
+        if (SelectedOptionIds.Contains(TransportPricing.OptionId) && _transportDistance.Value <= 0)
+        {
+            MessageBox.Show("Podaj dystans lawety większy od zera.", "Cars4Us");
             e.Cancel = true;
         }
     }
@@ -584,6 +599,9 @@ internal static class DialogHelpers
         FinancingKind.Cash => "Gotówka",
         FinancingKind.Leasing => "Leasing",
         FinancingKind.Credit => "Kredyt",
+        TransportRouteKind.PolandUpTo300Km => "Polska do 300 km",
+        TransportRouteKind.PolandOver300Km => "Polska powyżej 300 km",
+        TransportRouteKind.EuropeanUnion => "Transport międzynarodowy w UE",
         _ => value.ToString() ?? ""
     };
 

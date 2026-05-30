@@ -103,6 +103,29 @@ public sealed class CreditStrategy : IFinancingStrategy
 
 public sealed record PricingResult(decimal Amount, string Description);
 
+public static class TransportPricing
+{
+    public const string OptionId = "covered-transport";
+
+    public static decimal RateFor(TransportRouteKind routeKind) => routeKind switch
+    {
+        TransportRouteKind.PolandOver300Km => 3m,
+        TransportRouteKind.EuropeanUnion => 5m,
+        _ => 2m
+    };
+
+    public static decimal Calculate(int distanceKm, TransportRouteKind routeKind) =>
+        Math.Max(0, distanceKm) * RateFor(routeKind);
+
+    public static string Describe(TransportRouteKind routeKind) => routeKind switch
+    {
+        TransportRouteKind.PolandUpTo300Km => "Polska do 300 km",
+        TransportRouteKind.PolandOver300Km => "Polska powyżej 300 km",
+        TransportRouteKind.EuropeanUnion => "Transport międzynarodowy w UE",
+        _ => routeKind.ToString()
+    };
+}
+
 public interface IPriceComponent
 {
     decimal Calculate();

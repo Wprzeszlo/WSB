@@ -6,6 +6,7 @@ public enum VehicleAvailability { InShowroom, OnOrder }
 public enum EmployeeRole { Salesperson, Manager, ServiceTechnician }
 public enum FinancingKind { Cash, Leasing, Credit }
 public enum TransactionStage { Reserved, CreditVerification, Insurance, ReadyToRelease, Released, Withdrawn }
+public enum TransportRouteKind { PolandUpTo300Km, PolandOver300Km, EuropeanUnion }
 
 public sealed class Vehicle
 {
@@ -50,7 +51,7 @@ public sealed class CarOption
     public decimal Price { get; set; }
     public List<string> Requires { get; set; } = new();
     public List<string> Excludes { get; set; } = new();
-    public override string ToString() => $"{Name} (+{Price:C0})";
+    public override string ToString() => Id == TransportPricing.OptionId ? $"{Name} (stawka za km)" : $"{Name} (+{Price:C0})";
 }
 
 public sealed class TestDrive
@@ -73,6 +74,8 @@ public sealed class SaleTransaction
     public TransactionStage Stage { get; set; } = TransactionStage.Reserved;
     public FinancingKind Financing { get; set; }
     public List<string> SelectedOptionIds { get; set; } = new();
+    public int TransportDistanceKm { get; set; }
+    public TransportRouteKind TransportRouteKind { get; set; } = TransportRouteKind.PolandUpTo300Km;
     public decimal FinalPrice { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public List<TransactionSnapshot> History { get; set; } = new();
