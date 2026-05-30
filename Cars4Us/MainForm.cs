@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Drawing;
+using System.Text.Json;
 using System.Windows.Forms;
 
 namespace Cars4Us;
@@ -15,12 +16,14 @@ public sealed class MainForm : Form
     private readonly BindingSource _testDrives = new();
     private readonly BindingSource _transactions = new();
     private readonly BindingSource _notifications = new();
+    private readonly BindingSource _deletedRecords = new();
     private DataGridView _vehicleGrid = null!;
     private DataGridView _customerGrid = null!;
     private DataGridView _testDriveGrid = null!;
     private DataGridView _transactionGrid = null!;
     private DataGridView _employeeGrid = null!;
     private DataGridView _notificationGrid = null!;
+    private DataGridView _deletedRecordGrid = null!;
     private CheckedListBox _optionList = null!;
     private TextBox _pricingBox = null!;
     private ComboBox _financeBox = null!;
@@ -122,6 +125,7 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(BuildTestDriveTab());
         tabs.TabPages.Add(BuildSalesTab());
         tabs.TabPages.Add(BuildStaffTab());
+        tabs.TabPages.Add(BuildRecycleBinTab());
         Controls.Add(tabs);
     }
 
@@ -132,6 +136,7 @@ public sealed class MainForm : Form
         _vehicleGrid.DataSource = _vehicles;
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj auto old time", AddVehicle));
+        panel.Controls.Add(Button("Usuń pojazd", DeleteVehicle));
         panel.Controls.Add(Button("Zmień status", AdvanceVehicleState));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_vehicleGrid);
@@ -146,6 +151,7 @@ public sealed class MainForm : Form
         _customerGrid.DataSource = _customers;
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj klienta", AddCustomer));
+        panel.Controls.Add(Button("Usuń klienta", DeleteCustomer));
         panel.Controls.Add(Button("Historia klienta", ShowCustomerHistory));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_customerGrid);
@@ -204,6 +210,7 @@ public sealed class MainForm : Form
         panel.Controls.Add(Button("Rozpocznij sprzedaż", StartSale));
         panel.Controls.Add(Button("Następny etap", AdvanceSale));
         panel.Controls.Add(Button("Wycofaj", WithdrawSale));
+        panel.Controls.Add(Button("Usuń transakcję", DeleteSale));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_transactionGrid);
         page.Controls.Add(panel);
@@ -222,9 +229,32 @@ public sealed class MainForm : Form
         split.Panel2.Controls.Add(_notificationGrid);
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj pracownika", AddEmployee));
+        panel.Controls.Add(Button("Usuń pracownika", DeleteEmployee));
         panel.Controls.Add(Button("Symuluj dostawę auta", SimulateDelivery));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(split);
+        page.Controls.Add(panel);
+        return page;
+    }
+
+    private TabPage BuildRecycleBinTab()
+    {
+        var page = new TabPage("Kosz");
+        _deletedRecordGrid = Grid();
+        _deletedRecordGrid.DataSource = _deletedRecords;
+        LocalizeGrid(_deletedRecordGrid, new()
+        {
+            ["EntityType"] = "Typ danych",
+            ["DisplayName"] = "Nazwa",
+            ["DeletedAt"] = "Usunięto",
+            ["RestoreUntil"] = "Możliwe przywrócenie do",
+            ["DependenciesInfo"] = "Powiązania"
+        }, "Id", "PayloadJson");
+        var panel = TopPanel();
+        panel.Controls.Add(Button("Przywróć", RestoreDeletedRecord));
+        panel.Controls.Add(Button("Wyczyść wygasłe", PurgeExpiredDeletedRecords));
+        panel.Controls.Add(Button("Zapisz", Save));
+        page.Controls.Add(_deletedRecordGrid);
         page.Controls.Add(panel);
         return page;
     }
@@ -237,6 +267,7 @@ public sealed class MainForm : Form
         _testDrives.DataSource = new BindingList<TestDrive>(_store.Data.TestDrives);
         _transactions.DataSource = new BindingList<SaleTransaction>(_store.Data.Transactions);
         _notifications.DataSource = new BindingList<NotificationRow>(_store.Data.Notifications.Select(message => new NotificationRow { Message = message }).ToList());
+        _deletedRecords.DataSource = new BindingList<DeletedRecord>(_store.Data.DeletedRecords);
         _optionList.Items.Clear();
         foreach (var option in _store.Data.Options) _optionList.Items.Add(option, false);
         RecalculateConfiguration();
@@ -244,6 +275,7 @@ public sealed class MainForm : Form
 
     private Vehicle? SelectedVehicle() => _vehicleGrid.CurrentRow?.DataBoundItem as Vehicle ?? _store.Data.Vehicles.FirstOrDefault(v => VehicleStateFactory.From(v.StateName).CanReserve);
     private SaleTransaction? SelectedTransaction() => (_transactions.Current as SaleTransaction) ?? _store.Data.Transactions.LastOrDefault();
+    private DeletedRecord? SelectedDeletedRecord() => _deletedRecords.Current as DeletedRecord;
     private Customer? FirstCustomer() => _store.Data.Customers.FirstOrDefault();
     private Employee? FirstSalesperson() => _store.Data.Employees.FirstOrDefault(e => e.Role == EmployeeRole.Salesperson);
 
@@ -271,6 +303,26 @@ public sealed class MainForm : Form
         RefreshBindings();
     }
 
+    private void DeleteVehicle(object? sender, EventArgs e)
+    {
+        var vehicle = SelectedVehicle();
+        if (vehicle is null) return;
+        var relatedDrives = _store.Data.TestDrives.Where(d => d.VehicleVin == vehicle.Vin).ToList();
+        var relatedSales = _store.Data.Transactions.Where(t => t.VehicleVin == vehicle.Vin).ToList();
+        var dependencies = new List<string>();
+        dependencies.AddRange(relatedDrives.Select(d => $"Jazda próbna: {d.Start:g}"));
+        dependencies.AddRange(relatedSales.Select(t => $"Transakcja: {t.Stage}, {t.FinalPrice:C0}"));
+        if (!ConfirmDelete("Usuwanie pojazdu", vehicle.ToString(), dependencies)) return;
+
+        foreach (var drive in relatedDrives) MoveToRecycleBin("Jazda próbna", $"VIN {drive.VehicleVin}, {drive.Start:g}", drive, "Usunięto razem z pojazdem.");
+        foreach (var sale in relatedSales) MoveToRecycleBin("Transakcja", $"VIN {sale.VehicleVin}, {sale.CreatedAt:g}", sale, "Usunięto razem z pojazdem.");
+        MoveToRecycleBin("Pojazd", vehicle.ToString(), vehicle, string.Join("; ", dependencies));
+        _store.Data.TestDrives.RemoveAll(d => d.VehicleVin == vehicle.Vin);
+        _store.Data.Transactions.RemoveAll(t => t.VehicleVin == vehicle.Vin);
+        _store.Data.Vehicles.Remove(vehicle);
+        RefreshBindings();
+    }
+
     private void AddCustomer(object? sender, EventArgs e)
     {
         using var dialog = new CustomerEditorDialog();
@@ -289,12 +341,50 @@ public sealed class MainForm : Form
         MessageBox.Show($"Zakupy:\r\n{purchases}\r\n\r\nJazdy próbne:\r\n{string.Join("\r\n", drives.DefaultIfEmpty("Brak jazd."))}", customer.Name);
     }
 
+    private void DeleteCustomer(object? sender, EventArgs e)
+    {
+        if (_customers.Current is not Customer customer) return;
+        var relatedDrives = _store.Data.TestDrives.Where(d => d.CustomerId == customer.Id).ToList();
+        var relatedSales = _store.Data.Transactions.Where(t => t.CustomerId == customer.Id).ToList();
+        var dependencies = new List<string>();
+        dependencies.AddRange(relatedDrives.Select(d => $"Jazda próbna: VIN {d.VehicleVin}, {d.Start:g}"));
+        dependencies.AddRange(relatedSales.Select(t => $"Transakcja: VIN {t.VehicleVin}, {t.FinalPrice:C0}"));
+        if (!ConfirmDelete("Usuwanie klienta", customer.ToString(), dependencies)) return;
+
+        foreach (var drive in relatedDrives) MoveToRecycleBin("Jazda próbna", $"VIN {drive.VehicleVin}, {drive.Start:g}", drive, "Usunięto razem z klientem.");
+        foreach (var sale in relatedSales) MoveToRecycleBin("Transakcja", $"VIN {sale.VehicleVin}, {sale.CreatedAt:g}", sale, "Usunięto razem z klientem.");
+        MoveToRecycleBin("Klient", customer.ToString(), customer, string.Join("; ", dependencies));
+        _store.Data.TestDrives.RemoveAll(d => d.CustomerId == customer.Id);
+        _store.Data.Transactions.RemoveAll(t => t.CustomerId == customer.Id);
+        _store.Data.Customers.Remove(customer);
+        RefreshBindings();
+    }
+
     private void AddEmployee(object? sender, EventArgs e)
     {
         using var dialog = new EmployeeEditorDialog();
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         _store.Data.Employees.Add(dialog.Employee);
         _notifier.Publish($"Dodano pracownika: {dialog.Employee.Name}.");
+        RefreshBindings();
+    }
+
+    private void DeleteEmployee(object? sender, EventArgs e)
+    {
+        if (_employees.Current is not Employee employee) return;
+        var relatedDrives = _store.Data.TestDrives.Where(d => d.SalespersonId == employee.Id).ToList();
+        var relatedSales = _store.Data.Transactions.Where(t => t.SalespersonId == employee.Id).ToList();
+        var dependencies = new List<string>();
+        dependencies.AddRange(relatedDrives.Select(d => $"Jazda próbna: VIN {d.VehicleVin}, {d.Start:g}"));
+        dependencies.AddRange(relatedSales.Select(t => $"Transakcja: VIN {t.VehicleVin}, {t.FinalPrice:C0}"));
+        if (!ConfirmDelete("Usuwanie pracownika", employee.ToString(), dependencies)) return;
+
+        foreach (var drive in relatedDrives) MoveToRecycleBin("Jazda próbna", $"VIN {drive.VehicleVin}, {drive.Start:g}", drive, "Usunięto razem z pracownikiem.");
+        foreach (var sale in relatedSales) MoveToRecycleBin("Transakcja", $"VIN {sale.VehicleVin}, {sale.CreatedAt:g}", sale, "Usunięto razem z pracownikiem.");
+        MoveToRecycleBin("Pracownik", employee.ToString(), employee, string.Join("; ", dependencies));
+        _store.Data.TestDrives.RemoveAll(d => d.SalespersonId == employee.Id);
+        _store.Data.Transactions.RemoveAll(t => t.SalespersonId == employee.Id);
+        _store.Data.Employees.Remove(employee);
         RefreshBindings();
     }
 
@@ -315,6 +405,9 @@ public sealed class MainForm : Form
     {
         if (_testDrives.Current is TestDrive drive)
         {
+            var dependencies = new[] { $"Klient: {CustomerName(drive.CustomerId)}", $"Handlowiec: {EmployeeName(drive.SalespersonId)}", $"Pojazd: {drive.VehicleVin}" };
+            if (!ConfirmDelete("Usuwanie jazdy próbnej", $"VIN {drive.VehicleVin}, {drive.Start:g}", dependencies)) return;
+            MoveToRecycleBin("Jazda próbna", $"VIN {drive.VehicleVin}, {drive.Start:g}", drive, string.Join("; ", dependencies));
             _store.Data.TestDrives.Remove(drive);
             _notifier.Publish($"Anulowano jazdę próbną VIN {drive.VehicleVin}.");
             RefreshBindings();
@@ -374,6 +467,52 @@ public sealed class MainForm : Form
         RefreshBindings();
     }
 
+    private void DeleteSale(object? sender, EventArgs e)
+    {
+        var transaction = SelectedTransaction();
+        if (transaction is null) return;
+        var dependencies = new[]
+        {
+            $"Pojazd: {transaction.VehicleVin}",
+            $"Klient: {CustomerName(transaction.CustomerId)}",
+            $"Handlowiec: {EmployeeName(transaction.SalespersonId)}"
+        };
+        if (!ConfirmDelete("Usuwanie transakcji", $"VIN {transaction.VehicleVin}, {transaction.CreatedAt:g}", dependencies)) return;
+        MoveToRecycleBin("Transakcja", $"VIN {transaction.VehicleVin}, {transaction.CreatedAt:g}", transaction, string.Join("; ", dependencies));
+        _store.Data.Transactions.Remove(transaction);
+        RefreshBindings();
+    }
+
+    private void RestoreDeletedRecord(object? sender, EventArgs e)
+    {
+        var record = SelectedDeletedRecord();
+        if (record is null) return;
+        if (record.RestoreUntil < DateTime.Now)
+        {
+            MessageBox.Show("Tego rekordu nie można już przywrócić, ponieważ minęło 31 dni.", "Cars4Us");
+            return;
+        }
+
+        try
+        {
+            RestoreRecord(record);
+            _store.Data.DeletedRecords.Remove(record);
+            _notifier.Publish($"Przywrócono dane z kosza: {record.DisplayName}.");
+            RefreshBindings();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Nie udało się przywrócić rekordu:\r\n{ex.Message}", "Cars4Us");
+        }
+    }
+
+    private void PurgeExpiredDeletedRecords(object? sender, EventArgs e)
+    {
+        var removed = _store.Data.DeletedRecords.RemoveAll(record => record.RestoreUntil < DateTime.Now);
+        MessageBox.Show($"Usunięto wygasłe rekordy z kosza: {removed}.", "Cars4Us");
+        RefreshBindings();
+    }
+
     private void SimulateDelivery(object? sender, EventArgs e)
     {
         var vehicle = _store.Data.Vehicles.FirstOrDefault(v => v.StateName == "W transporcie");
@@ -383,6 +522,67 @@ public sealed class MainForm : Form
         _notifier.Publish($"Dostawa do salonu: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}.");
         RefreshBindings();
     }
+
+    private bool ConfirmDelete(string title, string displayName, IEnumerable<string> dependencies)
+    {
+        using var dialog = new DeleteConfirmationDialog(title, displayName, dependencies);
+        return dialog.ShowDialog(this) == DialogResult.OK;
+    }
+
+    private void MoveToRecycleBin<T>(string entityType, string displayName, T payload, string dependenciesInfo)
+    {
+        _store.Data.DeletedRecords.Add(new DeletedRecord
+        {
+            EntityType = entityType,
+            DisplayName = displayName,
+            DeletedAt = DateTime.Now,
+            PayloadJson = JsonSerializer.Serialize(payload, JsonDataStore.JsonOptions),
+            DependenciesInfo = string.IsNullOrWhiteSpace(dependenciesInfo) ? "Brak powiązań" : dependenciesInfo
+        });
+    }
+
+    private void RestoreRecord(DeletedRecord record)
+    {
+        switch (record.EntityType)
+        {
+            case "Pojazd":
+                var vehicle = JsonSerializer.Deserialize<Vehicle>(record.PayloadJson, JsonDataStore.JsonOptions) ?? throw new InvalidOperationException("Brak danych pojazdu.");
+                if (_store.Data.Vehicles.Any(v => v.Vin == vehicle.Vin)) throw new InvalidOperationException("Pojazd o tym VIN już istnieje.");
+                _store.Data.Vehicles.Add(vehicle);
+                break;
+            case "Klient":
+                var customer = JsonSerializer.Deserialize<Customer>(record.PayloadJson, JsonDataStore.JsonOptions) ?? throw new InvalidOperationException("Brak danych klienta.");
+                if (_store.Data.Customers.Any(c => c.Id == customer.Id)) throw new InvalidOperationException("Klient już istnieje.");
+                _store.Data.Customers.Add(customer);
+                break;
+            case "Pracownik":
+                var employee = JsonSerializer.Deserialize<Employee>(record.PayloadJson, JsonDataStore.JsonOptions) ?? throw new InvalidOperationException("Brak danych pracownika.");
+                if (_store.Data.Employees.Any(e => e.Id == employee.Id)) throw new InvalidOperationException("Pracownik już istnieje.");
+                _store.Data.Employees.Add(employee);
+                break;
+            case "Jazda próbna":
+                var drive = JsonSerializer.Deserialize<TestDrive>(record.PayloadJson, JsonDataStore.JsonOptions) ?? throw new InvalidOperationException("Brak danych jazdy próbnej.");
+                if (!_store.Data.Vehicles.Any(v => v.Vin == drive.VehicleVin)) throw new InvalidOperationException("Najpierw przywróć powiązany pojazd.");
+                if (!_store.Data.Customers.Any(c => c.Id == drive.CustomerId)) throw new InvalidOperationException("Najpierw przywróć powiązanego klienta.");
+                if (!_store.Data.Employees.Any(e => e.Id == drive.SalespersonId)) throw new InvalidOperationException("Najpierw przywróć powiązanego handlowca.");
+                if (_store.Data.TestDrives.Any(d => d.Id == drive.Id)) throw new InvalidOperationException("Jazda próbna już istnieje.");
+                _store.Data.TestDrives.Add(drive);
+                break;
+            case "Transakcja":
+                var sale = JsonSerializer.Deserialize<SaleTransaction>(record.PayloadJson, JsonDataStore.JsonOptions) ?? throw new InvalidOperationException("Brak danych transakcji.");
+                if (!_store.Data.Vehicles.Any(v => v.Vin == sale.VehicleVin)) throw new InvalidOperationException("Najpierw przywróć powiązany pojazd.");
+                if (!_store.Data.Customers.Any(c => c.Id == sale.CustomerId)) throw new InvalidOperationException("Najpierw przywróć powiązanego klienta.");
+                if (!_store.Data.Employees.Any(e => e.Id == sale.SalespersonId)) throw new InvalidOperationException("Najpierw przywróć powiązanego handlowca.");
+                if (_store.Data.Transactions.Any(t => t.Id == sale.Id)) throw new InvalidOperationException("Transakcja już istnieje.");
+                _store.Data.Transactions.Add(sale);
+                break;
+            default:
+                throw new InvalidOperationException("Nieznany typ danych w koszu.");
+        }
+    }
+
+    private string CustomerName(Guid id) => _store.Data.Customers.FirstOrDefault(c => c.Id == id)?.Name ?? "brak";
+    private string EmployeeName(Guid id) => _store.Data.Employees.FirstOrDefault(e => e.Id == id)?.Name ?? "brak";
 
     private void RecalculateConfiguration()
     {
