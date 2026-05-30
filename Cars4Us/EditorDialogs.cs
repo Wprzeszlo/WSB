@@ -416,6 +416,12 @@ public sealed class DeleteConfirmationDialog : Form
 
 internal static class DialogHelpers
 {
+    private static readonly Color ThemeInk = Color.FromArgb(25, 47, 56);
+    private static readonly Color ThemeInkLight = Color.FromArgb(34, 62, 72);
+    private static readonly Color ThemeCream = Color.FromArgb(247, 238, 219);
+    private static readonly Color ThemeGold = Color.FromArgb(174, 148, 103);
+    private static readonly Color ThemeSelection = Color.FromArgb(117, 99, 64);
+
     public static TableLayoutPanel DialogLayout()
     {
         return new TableLayoutPanel
@@ -425,7 +431,9 @@ internal static class DialogHelpers
             ColumnCount = 2,
             RowCount = 0,
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = ThemeCream,
+            ForeColor = ThemeInk
         };
     }
 
@@ -437,29 +445,39 @@ internal static class DialogHelpers
         form.MinimizeBox = false;
         form.AutoSize = true;
         form.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        form.BackColor = ThemeCream;
+        form.ForeColor = ThemeInk;
     }
 
     public static void AddRow(TableLayoutPanel panel, string label, Control control)
     {
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        panel.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 8, 0) }, 0, panel.RowCount);
+        panel.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 8, 0), BackColor = ThemeCream, ForeColor = ThemeInk }, 0, panel.RowCount);
         control.Width = Math.Max(control.Width, 260);
         control.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        StyleInput(control);
         panel.Controls.Add(control, 1, panel.RowCount);
         panel.RowCount++;
     }
 
     public static void AddButtons(TableLayoutPanel panel, string okText)
     {
-        var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, AutoSize = true };
-        var ok = new Button { Text = okText, DialogResult = DialogResult.OK, AutoSize = true };
-        var cancel = new Button { Text = "Anuluj", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, AutoSize = true, BackColor = ThemeCream };
+        var ok = DialogButton(okText, DialogResult.OK);
+        var cancel = DialogButton("Anuluj", DialogResult.Cancel);
         buttons.Controls.Add(ok);
         buttons.Controls.Add(cancel);
         panel.Controls.Add(buttons, 1, panel.RowCount++);
     }
 
-    public static TextBox CreateTextBox(string placeholder) => new() { PlaceholderText = placeholder, Width = 260 };
+    public static TextBox CreateTextBox(string placeholder) => new()
+    {
+        PlaceholderText = placeholder,
+        Width = 260,
+        BackColor = ThemeInk,
+        ForeColor = ThemeCream,
+        BorderStyle = BorderStyle.FixedSingle
+    };
 
     public static NumericUpDown CreateNumber(decimal min, decimal max, decimal value) => new()
     {
@@ -467,14 +485,64 @@ internal static class DialogHelpers
         Maximum = max,
         Value = value,
         Width = 260,
-        ThousandsSeparator = true
+        ThousandsSeparator = true,
+        BackColor = ThemeInk,
+        ForeColor = ThemeCream
     };
 
     public static ComboBox CreateCombo(Type enumType)
     {
-        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, FormattingEnabled = true };
+        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, FormattingEnabled = true, BackColor = ThemeInk, ForeColor = ThemeCream, FlatStyle = FlatStyle.Flat };
         combo.DataSource = Enum.GetValues(enumType);
         return combo;
+    }
+
+    private static Button DialogButton(string text, DialogResult result)
+    {
+        var button = new Button
+        {
+            Text = text,
+            DialogResult = result,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = ThemeInk,
+            ForeColor = ThemeCream
+        };
+        button.FlatAppearance.BorderColor = ThemeGold;
+        button.FlatAppearance.MouseOverBackColor = ThemeInkLight;
+        button.FlatAppearance.MouseDownBackColor = ThemeSelection;
+        return button;
+    }
+
+    private static void StyleInput(Control control)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.BackColor = ThemeInk;
+                textBox.ForeColor = ThemeCream;
+                textBox.BorderStyle = BorderStyle.FixedSingle;
+                break;
+            case ComboBox comboBox:
+                comboBox.BackColor = ThemeInk;
+                comboBox.ForeColor = ThemeCream;
+                comboBox.FlatStyle = FlatStyle.Flat;
+                break;
+            case NumericUpDown numeric:
+                numeric.BackColor = ThemeInk;
+                numeric.ForeColor = ThemeCream;
+                break;
+            case DateTimePicker picker:
+                picker.CalendarTitleBackColor = ThemeInk;
+                picker.CalendarTitleForeColor = ThemeCream;
+                picker.CalendarForeColor = ThemeInk;
+                picker.CalendarMonthBackground = ThemeCream;
+                break;
+            case CheckBox checkBox:
+                checkBox.BackColor = ThemeCream;
+                checkBox.ForeColor = ThemeInk;
+                break;
+        }
     }
 
     public static void LocalizeCombo(ComboBox combo, Func<object, string> formatter)

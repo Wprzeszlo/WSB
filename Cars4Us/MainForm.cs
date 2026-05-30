@@ -7,6 +7,14 @@ namespace Cars4Us;
 
 public sealed class MainForm : Form
 {
+    private static readonly Color ThemeInk = Color.FromArgb(25, 47, 56);
+    private static readonly Color ThemeInkLight = Color.FromArgb(34, 62, 72);
+    private static readonly Color ThemeCream = Color.FromArgb(247, 238, 219);
+    private static readonly Color ThemeGold = Color.FromArgb(174, 148, 103);
+    private static readonly Color ThemeGoldSoft = Color.FromArgb(218, 199, 160);
+    private static readonly Color ThemeGridLine = Color.FromArgb(82, 101, 107);
+    private static readonly Color ThemeSelection = Color.FromArgb(117, 99, 64);
+
     private readonly JsonDataStore _store;
     private readonly InventoryNotifier _notifier = new();
     private readonly SalesFacade _sales;
@@ -42,7 +50,10 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 9F);
+        BackColor = ThemeCream;
+        ForeColor = ThemeInk;
         BuildUi();
+        ApplyTheme(this);
         ConfigurePolishTables();
         RefreshBindings();
         Shown += (_, _) => ResizeWindowToContent();
@@ -120,7 +131,8 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var tabs = new TabControl { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed };
+        tabs.DrawItem += DrawThemeTab;
         tabs.TabPages.Add(BuildVehiclesTab());
         tabs.TabPages.Add(BuildCrmTab());
         tabs.TabPages.Add(BuildOptionsTab());
@@ -129,6 +141,22 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(BuildStaffTab());
         tabs.TabPages.Add(BuildRecycleBinTab());
         Controls.Add(tabs);
+    }
+
+    private static void DrawThemeTab(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not TabControl tabs || e.Index < 0) return;
+        var selected = tabs.SelectedIndex == e.Index;
+        using var background = new SolidBrush(selected ? ThemeCream : ThemeInk);
+        e.Graphics.FillRectangle(background, e.Bounds);
+        var textColor = selected ? ThemeInk : ThemeCream;
+        TextRenderer.DrawText(
+            e.Graphics,
+            tabs.TabPages[e.Index].Text,
+            tabs.Font,
+            e.Bounds,
+            textColor,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
 
     private TabPage BuildVehiclesTab()
@@ -792,7 +820,39 @@ public sealed class MainForm : Form
         AllowUserToDeleteRows = false,
         EditMode = DataGridViewEditMode.EditProgrammatically,
         SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-        MultiSelect = false
+        MultiSelect = false,
+        BackgroundColor = ThemeInk,
+        BorderStyle = BorderStyle.FixedSingle,
+        EnableHeadersVisualStyles = false,
+        GridColor = ThemeGridLine,
+        DefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = ThemeInk,
+            ForeColor = ThemeCream,
+            SelectionBackColor = ThemeSelection,
+            SelectionForeColor = ThemeCream
+        },
+        AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = ThemeInkLight,
+            ForeColor = ThemeCream,
+            SelectionBackColor = ThemeSelection,
+            SelectionForeColor = ThemeCream
+        },
+        ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = ThemeCream,
+            ForeColor = ThemeInk,
+            SelectionBackColor = ThemeGoldSoft,
+            SelectionForeColor = ThemeInk
+        },
+        RowHeadersDefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = ThemeCream,
+            ForeColor = ThemeInk,
+            SelectionBackColor = ThemeGoldSoft,
+            SelectionForeColor = ThemeInk
+        }
     };
 
     private void LocalizeGrid(DataGridView grid, Dictionary<string, string> headers, params string[] hiddenColumns)
@@ -901,21 +961,87 @@ public sealed class MainForm : Form
         Dock = DockStyle.Top,
         Height = 46,
         Padding = new Padding(8),
-        FlowDirection = FlowDirection.LeftToRight
+        FlowDirection = FlowDirection.LeftToRight,
+        BackColor = ThemeCream,
+        ForeColor = ThemeInk
     };
 
     private static Button Button(string text, EventHandler click)
     {
-        var button = new Button { Text = text, AutoSize = true, Height = 30, Margin = new Padding(4) };
+        var button = new Button
+        {
+            Text = text,
+            AutoSize = true,
+            Height = 30,
+            Margin = new Padding(4),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = ThemeInk,
+            ForeColor = ThemeCream
+        };
+        button.FlatAppearance.BorderColor = ThemeGold;
+        button.FlatAppearance.MouseOverBackColor = ThemeInkLight;
+        button.FlatAppearance.MouseDownBackColor = ThemeSelection;
         button.Click += click;
         return button;
     }
 
     private static CheckBox Check(string text, Action changed, bool value = false)
     {
-        var box = new CheckBox { Text = text, Checked = value, AutoSize = true, Padding = new Padding(8, 5, 0, 0) };
+        var box = new CheckBox { Text = text, Checked = value, AutoSize = true, Padding = new Padding(8, 5, 0, 0), BackColor = ThemeCream, ForeColor = ThemeInk };
         box.CheckedChanged += (_, _) => changed();
         return box;
+    }
+
+    private static void ApplyTheme(Control root)
+    {
+        StyleControl(root);
+        foreach (Control child in root.Controls) ApplyTheme(child);
+    }
+
+    private static void StyleControl(Control control)
+    {
+        control.ForeColor = ThemeInk;
+        switch (control)
+        {
+            case Form form:
+                form.BackColor = ThemeCream;
+                break;
+            case TabControl:
+                control.BackColor = ThemeInk;
+                control.ForeColor = ThemeCream;
+                break;
+            case TabPage:
+            case FlowLayoutPanel:
+            case TableLayoutPanel:
+            case Panel:
+                control.BackColor = ThemeCream;
+                break;
+            case SplitContainer split:
+                split.BackColor = ThemeGold;
+                split.Panel1.BackColor = ThemeCream;
+                split.Panel2.BackColor = ThemeCream;
+                break;
+            case Label:
+            case CheckBox:
+                control.BackColor = ThemeCream;
+                control.ForeColor = ThemeInk;
+                break;
+            case TextBox textBox:
+                textBox.BackColor = ThemeInk;
+                textBox.ForeColor = ThemeCream;
+                textBox.BorderStyle = BorderStyle.FixedSingle;
+                break;
+            case ComboBox comboBox:
+                comboBox.BackColor = ThemeInk;
+                comboBox.ForeColor = ThemeCream;
+                comboBox.FlatStyle = FlatStyle.Flat;
+                break;
+            case CheckedListBox checkedListBox:
+                checkedListBox.BackColor = ThemeInk;
+                checkedListBox.ForeColor = ThemeCream;
+                checkedListBox.BorderStyle = BorderStyle.FixedSingle;
+                break;
+        }
     }
 
     private FinancingKind SelectedFinancing() =>
