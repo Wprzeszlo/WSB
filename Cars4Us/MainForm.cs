@@ -32,7 +32,7 @@ public sealed class MainForm : Form
     private DataGridView _employeeGrid = null!;
     private DataGridView _notificationGrid = null!;
     private DataGridView _deletedRecordGrid = null!;
-    private ListBox _optionCatalog = null!;
+    private CheckedListBox _optionCatalog = null!;
     private TextBox _pricingBox = null!;
 
     public MainForm(JsonDataStore store)
@@ -197,8 +197,8 @@ public sealed class MainForm : Form
     {
         var page = new TabPage("Pakiet usług");
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 380 };
-        _optionCatalog = new ListBox { Dock = DockStyle.Fill, SelectionMode = SelectionMode.MultiExtended };
-        _optionCatalog.SelectedIndexChanged += (_, _) => ShowServiceCatalogInfo();
+        _optionCatalog = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
+        _optionCatalog.ItemCheck += (_, _) => BeginInvoke((Action)ShowServiceCatalogInfo);
         _pricingBox = new TextBox { Multiline = true, Dock = DockStyle.Fill, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
         split.Panel1.Controls.Add(_optionCatalog);
         split.Panel2.Controls.Add(_pricingBox);
@@ -291,7 +291,7 @@ public sealed class MainForm : Form
         _notifications.DataSource = new BindingList<NotificationRow>(_store.Data.Notifications.Select(message => new NotificationRow { Message = message }).ToList());
         _deletedRecords.DataSource = new BindingList<DeletedRecord>(_store.Data.DeletedRecords);
         _optionCatalog.Items.Clear();
-        foreach (var option in _store.Data.Options) _optionCatalog.Items.Add(option);
+        foreach (var option in _store.Data.Options) _optionCatalog.Items.Add(option, false);
         ShowServiceCatalogInfo();
     }
 
@@ -748,7 +748,7 @@ public sealed class MainForm : Form
     private void ShowServiceCatalogInfo()
     {
         if (_pricingBox is null) return;
-        var selectedOptions = _optionCatalog?.SelectedItems.Cast<CarOption>().ToList() ?? new List<CarOption>();
+        var selectedOptions = _optionCatalog?.CheckedItems.Cast<CarOption>().ToList() ?? new List<CarOption>();
         var vehicle = SelectedVehicle();
         var quote = vehicle is null
             ? "Wybierz pojazd w zakładce „Pojazdy”, aby zobaczyć poglądową cenę z usługą."
