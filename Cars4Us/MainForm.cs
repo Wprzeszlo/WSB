@@ -858,6 +858,7 @@ public sealed class MainForm : Form
         "CommissionBalance" when value is decimal commission => $"{commission:N2} zł",
         "FinalPrice" when value is decimal finalPrice => $"{finalPrice:N2} zł",
         "BasePrice" when value is decimal basePrice => $"{basePrice:N2} zł",
+        "Mileage" when value is int mileage => $"{mileage:N0} km",
         _ => null
     };
 
