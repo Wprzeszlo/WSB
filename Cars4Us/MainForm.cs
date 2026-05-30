@@ -56,8 +56,21 @@ public sealed class MainForm : Form
             ["BasePrice"] = "Cena bazowa",
             ["Availability"] = "Dostępność",
             ["StateName"] = "Status",
-            ["IsTestDriveCar"] = "Auto testowe"
+            ["IsTestDriveCar"] = "Testowe"
         }, "SelectedOptionIds");
+        SetColumnWidths(_vehicleGrid, new()
+        {
+            ["Vin"] = 130,
+            ["Brand"] = 120,
+            ["Model"] = 130,
+            ["Engine"] = 110,
+            ["Gearbox"] = 120,
+            ["Mileage"] = 95,
+            ["BasePrice"] = 120,
+            ["Availability"] = 130,
+            ["StateName"] = 120,
+            ["IsTestDriveCar"] = 85
+        });
 
         LocalizeGrid(_customerGrid, new()
         {
@@ -432,6 +445,19 @@ public sealed class MainForm : Form
             if (localized is null) return;
             e.Value = localized;
             e.FormattingApplied = true;
+        };
+    }
+
+    private static void SetColumnWidths(DataGridView grid, Dictionary<string, int> widths)
+    {
+        grid.DataBindingComplete += (_, _) =>
+        {
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                if (!widths.TryGetValue(column.DataPropertyName, out var width)) continue;
+                column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                column.Width = width;
+            }
         };
     }
 
