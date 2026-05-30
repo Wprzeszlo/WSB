@@ -249,14 +249,15 @@ public sealed class MainForm : Form
 
     private void AddVehicle(object? sender, EventArgs e)
     {
-        var number = _store.Data.Vehicles.Count + 1;
-        _store.Data.Vehicles.Add(new CarBuilder()
-            .Identity($"OLD{number:000}VIN19{60 + number}", "Porsche", "911 Classic")
-            .Technical(EngineType.Petrol, Gearbox.Manual, 75000 + number * 1000)
-            .Price(310000 + number * 5000)
-            .Availability(VehicleAvailability.InShowroom)
-            .Options("leather", "wheels")
-            .Build());
+        using var dialog = new VehicleEditorDialog();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (_store.Data.Vehicles.Any(v => v.Vin.Equals(dialog.Vehicle.Vin, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show("Pojazd o podanym VIN już istnieje.", "Cars4Us");
+            return;
+        }
+        _store.Data.Vehicles.Add(dialog.Vehicle);
+        _notifier.Publish($"Dodano pojazd: {dialog.Vehicle.Brand} {dialog.Vehicle.Model}, VIN {dialog.Vehicle.Vin}.");
         RefreshBindings();
     }
 
@@ -272,8 +273,10 @@ public sealed class MainForm : Form
 
     private void AddCustomer(object? sender, EventArgs e)
     {
-        var number = _store.Data.Customers.Count + 1;
-        _store.Data.Customers.Add(new Customer { Name = $"Klient {number}", Phone = $"500 000 {number:000}", Email = $"klient{number}@cars4us.local" });
+        using var dialog = new CustomerEditorDialog();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _store.Data.Customers.Add(dialog.Customer);
+        _notifier.Publish($"Dodano klienta: {dialog.Customer.Name}.");
         RefreshBindings();
     }
 
@@ -288,23 +291,23 @@ public sealed class MainForm : Form
 
     private void AddEmployee(object? sender, EventArgs e)
     {
-        var number = _store.Data.Employees.Count + 1;
-        _store.Data.Employees.Add(new Employee { Name = $"Handlowiec {number}", Role = EmployeeRole.Salesperson });
+        using var dialog = new EmployeeEditorDialog();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _store.Data.Employees.Add(dialog.Employee);
+        _notifier.Publish($"Dodano pracownika: {dialog.Employee.Name}.");
         RefreshBindings();
     }
 
     private void AddTestDrive(object? sender, EventArgs e)
     {
-        var vehicle = _store.Data.Vehicles.FirstOrDefault(v => v.IsTestDriveCar);
-        var customer = FirstCustomer();
-        var salesperson = FirstSalesperson();
-        if (vehicle is null || customer is null || salesperson is null) { MessageBox.Show("Brakuje auta testowego, klienta lub handlowca."); return; }
-        var start = DateTime.Today.AddDays(1).AddHours(10 + _store.Data.TestDrives.Count % 6);
-        var end = start.AddHours(1);
-        var conflict = _store.Data.TestDrives.Any(d => d.VehicleVin == vehicle.Vin && start < d.End && end > d.Start);
+        using var dialog = new TestDriveEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var drive = dialog.TestDrive;
+        var conflict = _store.Data.TestDrives.Any(d => d.VehicleVin == drive.VehicleVin && drive.Start < d.End && drive.End > d.Start);
         if (conflict) { MessageBox.Show("Wybrany termin koliduje z istniejącą jazdą próbną."); return; }
-        _store.Data.TestDrives.Add(new TestDrive { VehicleVin = vehicle.Vin, CustomerId = customer.Id, SalespersonId = salesperson.Id, Start = start, End = end, Notes = "Rezerwacja z kalendarza Cars4Us" });
-        _notifier.Publish($"Zaplanowano jazdę próbną VIN {vehicle.Vin} dla {customer.Name}.");
+        var customer = _store.Data.Customers.First(c => c.Id == drive.CustomerId);
+        _store.Data.TestDrives.Add(drive);
+        _notifier.Publish($"Zaplanowano jazdę próbną VIN {drive.VehicleVin} dla {customer.Name}.");
         RefreshBindings();
     }
 
@@ -330,16 +333,18 @@ public sealed class MainForm : Form
 
     private void StartSale(object? sender, EventArgs e)
     {
-        var vehicle = SelectedVehicle();
-        var customer = FirstCustomer();
-        var salesperson = FirstSalesperson();
-        if (vehicle is null || customer is null || salesperson is null) { MessageBox.Show("Brakuje danych do sprzedaży."); return; }
+        using var dialog = new SaleEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        var vehicle = dialog.Vehicle;
+        var customer = dialog.Customer;
+        var salesperson = dialog.Salesperson;
         var result = ValidateSelectedOptions(vehicle);
         var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
+        _financeBox.SelectedItem = dialog.Financing;
         var finalPrice = CalculatePrice(vehicle).Amount + optionCost;
         try
         {
-            _sales.ReserveAndStartSale(vehicle, customer, salesperson, SelectedFinancing(), finalPrice);
+            _sales.ReserveAndStartSale(vehicle, customer, salesperson, dialog.Financing, finalPrice);
             RefreshBindings();
         }
         catch (Exception ex) { MessageBox.Show(ex.Message); }
