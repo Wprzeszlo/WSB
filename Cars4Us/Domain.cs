@@ -95,4 +95,16 @@ public sealed class DealershipData
     public List<TestDrive> TestDrives { get; set; } = new();
     public List<SaleTransaction> Transactions { get; set; } = new();
     public List<string> Notifications { get; set; } = new();
+    public List<DeletedRecord> DeletedRecords { get; set; } = new();
+}
+
+public sealed class DeletedRecord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string EntityType { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public DateTime DeletedAt { get; set; } = DateTime.Now;
+    public string PayloadJson { get; set; } = "";
+    public string DependenciesInfo { get; set; } = "";
+    public DateTime RestoreUntil => DeletedAt.AddDays(31);
 }
