@@ -40,10 +40,12 @@ public sealed class MainForm : Form
         Width = 1180;
         Height = 760;
         StartPosition = FormStartPosition.CenterScreen;
+        AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 9F);
         BuildUi();
         ConfigurePolishTables();
         RefreshBindings();
+        BeginInvoke((Action)ResizeWindowToContent);
     }
 
     private void ConfigurePolishTables()
@@ -276,6 +278,38 @@ public sealed class MainForm : Form
         _optionList.Items.Clear();
         foreach (var option in _store.Data.Options) _optionList.Items.Add(option, false);
         RecalculateConfiguration();
+    }
+
+    private void ResizeWindowToContent()
+    {
+        var grids = new[] { _vehicleGrid, _customerGrid, _testDriveGrid, _transactionGrid, _employeeGrid, _notificationGrid, _deletedRecordGrid };
+        var widestGrid = grids.Where(grid => grid is not null).Select(PreferredGridWidth).DefaultIfEmpty(Width).Max();
+        var widestToolbar = Controls.OfType<TabControl>()
+            .SelectMany(tab => tab.TabPages.Cast<TabPage>())
+            .SelectMany(page => page.Controls.OfType<FlowLayoutPanel>())
+            .Select(panel => panel.PreferredSize.Width + 48)
+            .DefaultIfEmpty(Width)
+            .Max();
+        var tabHeadersWidth = Controls.OfType<TabControl>().FirstOrDefault()?.TabPages.Cast<TabPage>().Sum(page => TextRenderer.MeasureText(page.Text, Font).Width + 32) ?? 0;
+
+        var workingArea = Screen.FromControl(this).WorkingArea;
+        var desiredWidth = Math.Max(1180, Math.Max(widestGrid + 48, Math.Max(widestToolbar + 24, tabHeadersWidth + 72)));
+        var desiredHeight = Math.Max(760, PreferredGridHeight(_vehicleGrid) + 150);
+        Width = Math.Min(desiredWidth, workingArea.Width - 40);
+        Height = Math.Min(desiredHeight, workingArea.Height - 40);
+        CenterToScreen();
+    }
+
+    private static int PreferredGridWidth(DataGridView grid)
+    {
+        var columnsWidth = grid.Columns.Cast<DataGridViewColumn>().Where(column => column.Visible).Sum(column => column.Width);
+        return grid.RowHeadersWidth + columnsWidth + SystemInformation.VerticalScrollBarWidth + 24;
+    }
+
+    private static int PreferredGridHeight(DataGridView grid)
+    {
+        var visibleRows = Math.Min(Math.Max(grid.Rows.Count, 4), 12);
+        return grid.ColumnHeadersHeight + visibleRows * grid.RowTemplate.Height + SystemInformation.HorizontalScrollBarHeight + 24;
     }
 
     private Vehicle? SelectedVehicle() => _vehicleGrid.CurrentRow?.DataBoundItem as Vehicle ?? _store.Data.Vehicles.FirstOrDefault(v => VehicleStateFactory.From(v.StateName).CanReserve);
