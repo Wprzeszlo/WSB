@@ -855,6 +855,9 @@ public sealed class MainForm : Form
         },
         "CustomerId" when value is Guid customerId => _store.Data.Customers.FirstOrDefault(c => c.Id == customerId)?.Name ?? "Nieznany klient",
         "SalespersonId" when value is Guid salespersonId => _store.Data.Employees.FirstOrDefault(e => e.Id == salespersonId)?.Name ?? "Nieznany handlowiec",
+        "CommissionBalance" when value is decimal commission => $"{commission:N2} zł",
+        "FinalPrice" when value is decimal finalPrice => $"{finalPrice:N2} zł",
+        "BasePrice" when value is decimal basePrice => $"{basePrice:N2} zł",
         _ => null
     };
 

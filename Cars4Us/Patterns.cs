@@ -244,7 +244,7 @@ public sealed class AdvanceTransactionCommand : ITransactionCommand
         };
         _vehicle.StateName = _transaction.Stage == TransactionStage.Released ? "Wydane" :
             _transaction.Stage == TransactionStage.ReadyToRelease ? "Sprzedane" : "Zarezerwowane";
-        _employee.CommissionBalance += _transaction.FinalPrice * 0.004m;
+        _employee.CommissionBalance += Math.Round(_transaction.FinalPrice * 0.004m, 2);
     }
 
     public void Undo()
@@ -274,7 +274,7 @@ public sealed class SalesFacade
             Financing = financing,
             FinalPrice = finalPrice
         };
-        salesperson.CommissionBalance += finalPrice * 0.01m;
+        salesperson.CommissionBalance += Math.Round(finalPrice * 0.01m, 2);
         _data.Transactions.Add(transaction);
         _notifier.Publish($"VIN {vehicle.Vin} został zarezerwowany przez {customer.Name}.");
         return transaction;
