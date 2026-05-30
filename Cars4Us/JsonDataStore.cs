@@ -103,6 +103,7 @@ public sealed class JsonDataStore
                 SalespersonId TEXT NOT NULL,
                 Stage TEXT NOT NULL,
                 Financing TEXT NOT NULL,
+                SelectedOptionIds TEXT NOT NULL DEFAULT '[]',
                 FinalPrice REAL NOT NULL,
                 CreatedAt TEXT NOT NULL,
                 HistoryJson TEXT NOT NULL
@@ -121,6 +122,7 @@ public sealed class JsonDataStore
                 DependenciesInfo TEXT NOT NULL
             );
             """);
+        EnsureColumn(connection, "TransactionsTable", "SelectedOptionIds", "TEXT NOT NULL DEFAULT '[]'");
     }
 
     private bool HasVehicles()
@@ -243,6 +245,7 @@ public sealed class JsonDataStore
                     SalespersonId = Guid.Parse(reader.GetString(reader.GetOrdinal("SalespersonId"))),
                     Stage = Enum.Parse<TransactionStage>(reader.GetString(reader.GetOrdinal("Stage"))),
                     Financing = Enum.Parse<FinancingKind>(reader.GetString(reader.GetOrdinal("Financing"))),
+                    SelectedOptionIds = ReadList<string>(reader.GetString(reader.GetOrdinal("SelectedOptionIds"))),
                     FinalPrice = Convert.ToDecimal(reader.GetDouble(reader.GetOrdinal("FinalPrice"))),
                     CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("CreatedAt"))),
                     History = ReadList<TransactionSnapshot>(reader.GetString(reader.GetOrdinal("HistoryJson")))
@@ -344,11 +347,14 @@ public sealed class JsonDataStore
         foreach (var sale in Data.Transactions)
         {
             Execute(connection, transaction, """
-                INSERT INTO TransactionsTable VALUES ($id, $vehicleVin, $customerId, $salespersonId, $stage, $financing, $finalPrice, $createdAt, $history)
+                INSERT INTO TransactionsTable
+                (Id, VehicleVin, CustomerId, SalespersonId, Stage, Financing, SelectedOptionIds, FinalPrice, CreatedAt, HistoryJson)
+                VALUES ($id, $vehicleVin, $customerId, $salespersonId, $stage, $financing, $selectedOptionIds, $finalPrice, $createdAt, $history)
                 """,
                 ("$id", sale.Id.ToString()), ("$vehicleVin", sale.VehicleVin), ("$customerId", sale.CustomerId.ToString()),
                 ("$salespersonId", sale.SalespersonId.ToString()), ("$stage", sale.Stage.ToString()),
-                ("$financing", sale.Financing.ToString()), ("$finalPrice", Convert.ToDouble(sale.FinalPrice)),
+                ("$financing", sale.Financing.ToString()), ("$selectedOptionIds", WriteList(sale.SelectedOptionIds)),
+                ("$finalPrice", Convert.ToDouble(sale.FinalPrice)),
                 ("$createdAt", sale.CreatedAt.ToString("O")), ("$history", WriteList(sale.History)));
         }
     }
@@ -378,6 +384,19 @@ public sealed class JsonDataStore
         command.CommandText = sql;
         foreach (var parameter in parameters) command.Parameters.AddWithValue(parameter.Name, parameter.Value ?? DBNull.Value);
         command.ExecuteNonQuery();
+    }
+
+    private static void EnsureColumn(SqliteConnection connection, string tableName, string columnName, string definition)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({tableName})";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            if (reader.GetString(1).Equals(columnName, StringComparison.OrdinalIgnoreCase)) return;
+        }
+        reader.Close();
+        Execute(connection, null, $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition}");
     }
 
     private static string WriteList<T>(List<T> values) => JsonSerializer.Serialize(values, JsonOptions);

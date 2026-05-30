@@ -327,8 +327,9 @@ public sealed class SaleEditorDialog : Form
     private readonly ComboBox _customer = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _salesperson = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _financing = CreateCombo(typeof(FinancingKind));
+    private readonly CheckedListBox _serviceOptions = new() { CheckOnClick = true, Height = 150 };
 
-    public SaleEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees, SaleTransaction? transaction = null)
+    public SaleEditorDialog(IEnumerable<Vehicle> vehicles, IEnumerable<Customer> customers, IEnumerable<Employee> employees, IEnumerable<CarOption> options, SaleTransaction? transaction = null)
     {
         Text = "Rozpoczęcie sprzedaży";
         ConfigureDialogWindow(this);
@@ -336,15 +337,18 @@ public sealed class SaleEditorDialog : Form
         var vehicleList = vehicles.Where(v => VehicleStateFactory.From(v.StateName).CanReserve || v.Vin == transaction?.VehicleVin).ToList();
         var customerList = customers.ToList();
         var salespersonList = employees.Where(e => e.Role == EmployeeRole.Salesperson || e.Id == transaction?.SalespersonId).ToList();
+        var optionList = options.ToList();
         _vehicle.DataSource = vehicleList;
         _customer.DataSource = customerList;
         _salesperson.DataSource = salespersonList;
+        foreach (var option in optionList) _serviceOptions.Items.Add(option);
 
         var panel = DialogLayout();
         AddRow(panel, "Pojazd", _vehicle);
         AddRow(panel, "Klient", _customer);
         AddRow(panel, "Handlowiec", _salesperson);
         AddRow(panel, "Finansowanie", _financing);
+        AddRow(panel, "Pakiet usług", _serviceOptions);
         AddButtons(panel, "Rozpocznij sprzedaż");
         Controls.Add(panel);
 
@@ -355,12 +359,17 @@ public sealed class SaleEditorDialog : Form
         SelectComboItem(_customer, customerList.FirstOrDefault(c => c.Id == transaction.CustomerId));
         SelectComboItem(_salesperson, salespersonList.FirstOrDefault(e => e.Id == transaction.SalespersonId));
         SelectEnumValue(_financing, transaction.Financing);
+        for (var i = 0; i < _serviceOptions.Items.Count; i++)
+        {
+            if (_serviceOptions.Items[i] is CarOption option && transaction.SelectedOptionIds.Contains(option.Id)) _serviceOptions.SetItemChecked(i, true);
+        }
     }
 
     public Vehicle Vehicle => (Vehicle)_vehicle.SelectedItem!;
     public Customer Customer => (Customer)_customer.SelectedItem!;
     public Employee Salesperson => (Employee)_salesperson.SelectedItem!;
     public FinancingKind Financing => (FinancingKind)_financing.SelectedItem!;
+    public List<string> SelectedOptionIds => _serviceOptions.CheckedItems.Cast<CarOption>().Select(option => option.Id).ToList();
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -541,6 +550,11 @@ internal static class DialogHelpers
             case CheckBox checkBox:
                 checkBox.BackColor = ThemeCream;
                 checkBox.ForeColor = ThemeInk;
+                break;
+            case CheckedListBox checkedListBox:
+                checkedListBox.BackColor = ThemeInk;
+                checkedListBox.ForeColor = ThemeCream;
+                checkedListBox.BorderStyle = BorderStyle.FixedSingle;
                 break;
         }
     }

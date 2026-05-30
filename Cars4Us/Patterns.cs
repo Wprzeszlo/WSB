@@ -262,7 +262,7 @@ public sealed class SalesFacade
     private readonly InventoryNotifier _notifier;
     public SalesFacade(DealershipData data, InventoryNotifier notifier) { _data = data; _notifier = notifier; }
 
-    public SaleTransaction ReserveAndStartSale(Vehicle vehicle, Customer customer, Employee salesperson, FinancingKind financing, decimal finalPrice)
+    public SaleTransaction ReserveAndStartSale(Vehicle vehicle, Customer customer, Employee salesperson, FinancingKind financing, IEnumerable<string> selectedOptionIds, decimal finalPrice)
     {
         if (!VehicleStateFactory.From(vehicle.StateName).CanReserve) throw new InvalidOperationException("Auto nie jest dostępne do rezerwacji.");
         vehicle.StateName = "Zarezerwowane";
@@ -272,6 +272,7 @@ public sealed class SalesFacade
             CustomerId = customer.Id,
             SalespersonId = salesperson.Id,
             Financing = financing,
+            SelectedOptionIds = selectedOptionIds.ToList(),
             FinalPrice = finalPrice
         };
         salesperson.CommissionBalance += Math.Round(finalPrice * 0.01m, 2);

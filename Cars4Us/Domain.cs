@@ -72,6 +72,7 @@ public sealed class SaleTransaction
     public Guid SalespersonId { get; set; }
     public TransactionStage Stage { get; set; } = TransactionStage.Reserved;
     public FinancingKind Financing { get; set; }
+    public List<string> SelectedOptionIds { get; set; } = new();
     public decimal FinalPrice { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public List<TransactionSnapshot> History { get; set; } = new();

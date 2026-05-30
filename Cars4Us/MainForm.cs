@@ -32,12 +32,8 @@ public sealed class MainForm : Form
     private DataGridView _employeeGrid = null!;
     private DataGridView _notificationGrid = null!;
     private DataGridView _deletedRecordGrid = null!;
-    private CheckedListBox _optionList = null!;
+    private ListBox _optionCatalog = null!;
     private TextBox _pricingBox = null!;
-    private ComboBox _financeBox = null!;
-    private CheckBox _fleetBox = null!;
-    private CheckBox _insuranceBox = null!;
-    private CheckBox _warrantyBox = null!;
 
     public MainForm(JsonDataStore store)
     {
@@ -112,6 +108,7 @@ public sealed class MainForm : Form
             ["SalespersonId"] = "Handlowiec",
             ["Stage"] = "Etap",
             ["Financing"] = "Finansowanie",
+            ["SelectedOptionIds"] = "Usługi",
             ["FinalPrice"] = "Cena końcowa",
             ["CreatedAt"] = "Utworzono"
         }, "Id", "History");
@@ -200,26 +197,10 @@ public sealed class MainForm : Form
     {
         var page = new TabPage("Pakiet usług");
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 380 };
-        _optionList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
-        _optionList.ItemCheck += (_, _) => BeginInvoke((Action)RecalculateConfiguration);
-        split.Panel1.Controls.Add(_optionList);
-
-        _financeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
-        _financeBox.DataSource = Enum.GetValues(typeof(FinancingKind));
-        _financeBox.SelectedIndexChanged += (_, _) => RecalculateConfiguration();
-        _fleetBox = Check("Klient flotowy", RecalculateConfiguration);
-        _insuranceBox = Check("Ubezpieczenie", RecalculateConfiguration, true);
-        _warrantyBox = Check("Gwarancja rozszerzona", RecalculateConfiguration);
+        _optionCatalog = new ListBox { Dock = DockStyle.Fill };
         _pricingBox = new TextBox { Multiline = true, Dock = DockStyle.Fill, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
-        var top = TopPanel();
-        top.Controls.Add(new Label { Text = "Finansowanie:", AutoSize = true, Padding = new Padding(8, 8, 0, 0) });
-        top.Controls.Add(_financeBox);
-        top.Controls.Add(_fleetBox);
-        top.Controls.Add(_insuranceBox);
-        top.Controls.Add(_warrantyBox);
-        top.Controls.Add(Button("Zastosuj pakiet", ApplyConfiguration));
+        split.Panel1.Controls.Add(_optionCatalog);
         split.Panel2.Controls.Add(_pricingBox);
-        split.Panel2.Controls.Add(top);
         page.Controls.Add(split);
         return page;
     }
@@ -308,9 +289,9 @@ public sealed class MainForm : Form
         _transactions.DataSource = new BindingList<SaleTransaction>(_store.Data.Transactions);
         _notifications.DataSource = new BindingList<NotificationRow>(_store.Data.Notifications.Select(message => new NotificationRow { Message = message }).ToList());
         _deletedRecords.DataSource = new BindingList<DeletedRecord>(_store.Data.DeletedRecords);
-        _optionList.Items.Clear();
-        foreach (var option in _store.Data.Options) _optionList.Items.Add(option, false);
-        RecalculateConfiguration();
+        _optionCatalog.Items.Clear();
+        foreach (var option in _store.Data.Options) _optionCatalog.Items.Add(option);
+        ShowServiceCatalogInfo();
     }
 
     private void ResizeWindowToContent()
@@ -556,30 +537,26 @@ public sealed class MainForm : Form
         RefreshBindings();
     }
 
-    private void ApplyConfiguration(object? sender, EventArgs e)
-    {
-        var vehicle = SelectedVehicle();
-        if (vehicle is null) return;
-        var result = ValidateSelectedOptions(vehicle);
-        vehicle.SelectedOptionIds = result.SelectedIds;
-        _notifier.Publish($"Zastosowano pakiet usług dla VIN {vehicle.Vin}: {string.Join(", ", result.SelectedIds)}.");
-        RefreshBindings();
-    }
-
     private void StartSale(object? sender, EventArgs e)
     {
-        using var dialog = new SaleEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees);
+        using var dialog = new SaleEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees, _store.Data.Options);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         var vehicle = dialog.Vehicle;
         var customer = dialog.Customer;
         var salesperson = dialog.Salesperson;
-        var result = ValidateSelectedOptions(vehicle);
+        var result = ValidateServiceOptions(vehicle, dialog.SelectedOptionIds);
+        ShowServiceRuleMessages(result);
         var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
-        _financeBox.SelectedItem = dialog.Financing;
-        var finalPrice = CalculatePrice(vehicle).Amount + optionCost;
+        var finalPrice = CalculatePrice(vehicle, dialog.Financing).Amount + optionCost;
         try
         {
-            _sales.ReserveAndStartSale(vehicle, customer, salesperson, dialog.Financing, finalPrice);
+            var transaction = _sales.ReserveAndStartSale(vehicle, customer, salesperson, dialog.Financing, result.SelectedIds, finalPrice);
+            transaction.History.Add(new TransactionSnapshot
+            {
+                Stage = transaction.Stage,
+                VehicleState = vehicle.StateName,
+                Description = $"Wybrane usługi: {ServiceNames(result.SelectedIds)}"
+            });
             RefreshBindings();
         }
         catch (Exception ex) { MessageBox.Show(ex.Message); }
@@ -629,7 +606,7 @@ public sealed class MainForm : Form
     {
         var transaction = SelectedTransaction();
         if (transaction is null) return;
-        using var dialog = new SaleEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees, transaction);
+        using var dialog = new SaleEditorDialog(_store.Data.Vehicles, _store.Data.Customers, _store.Data.Employees, _store.Data.Options, transaction);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         if (!ConfirmModification("Modyfikacja transakcji", $"VIN {transaction.VehicleVin}, {transaction.CreatedAt:g}")) return;
 
@@ -644,13 +621,16 @@ public sealed class MainForm : Form
         transaction.CustomerId = dialog.Customer.Id;
         transaction.SalespersonId = dialog.Salesperson.Id;
         transaction.Financing = dialog.Financing;
-        _financeBox.SelectedItem = dialog.Financing;
-        transaction.FinalPrice = CalculatePrice(dialog.Vehicle).Amount;
+        var result = ValidateServiceOptions(dialog.Vehicle, dialog.SelectedOptionIds);
+        ShowServiceRuleMessages(result);
+        var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
+        transaction.SelectedOptionIds = result.SelectedIds;
+        transaction.FinalPrice = CalculatePrice(dialog.Vehicle, dialog.Financing).Amount + optionCost;
         transaction.History.Add(new TransactionSnapshot
         {
             Stage = transaction.Stage,
             VehicleState = dialog.Vehicle.StateName,
-            Description = "Modyfikacja danych transakcji"
+            Description = $"Modyfikacja danych transakcji. Usługi: {ServiceNames(result.SelectedIds)}"
         });
         _notifier.Publish($"Zmodyfikowano transakcję VIN {transaction.VehicleVin}.");
         RefreshBindings();
@@ -764,36 +744,49 @@ public sealed class MainForm : Form
     private string CustomerName(Guid id) => _store.Data.Customers.FirstOrDefault(c => c.Id == id)?.Name ?? "brak";
     private string EmployeeName(Guid id) => _store.Data.Employees.FirstOrDefault(e => e.Id == id)?.Name ?? "brak";
 
-    private void RecalculateConfiguration()
+    private void ShowServiceCatalogInfo()
     {
-        var vehicle = SelectedVehicle();
-        if (vehicle is null || _pricingBox is null) return;
-        var result = ValidateSelectedOptions(vehicle);
-        var pricing = CalculatePrice(vehicle);
-        var optionCost = result.SelectedIds.Select(id => _store.Data.Options.First(o => o.Id == id).Price).Sum();
+        if (_pricingBox is null) return;
         _pricingBox.Text =
-            $"Auto: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}\r\n" +
-            $"Usługi po walidacji: {string.Join(", ", result.SelectedIds.DefaultIfEmpty("brak"))}\r\n" +
-            $"Koszt usług: {optionCost:C0}\r\n\r\n" +
-            $"{pricing.Description}\r\n\r\nCena końcowa: {pricing.Amount + optionCost:C0}\r\n\r\n" +
-            $"Reguły pakietu usług:\r\n{string.Join("\r\n", result.Messages.DefaultIfEmpty("Brak konfliktów."))}";
+            "Katalog usług old time\r\n\r\n" +
+            "Ten widok jest wyłącznie informacyjny. Zaznaczanie usług i naliczanie opłat odbywa się dopiero w konfiguratorze sprzedaży po kliknięciu „Rozpocznij sprzedaż”.\r\n\r\n" +
+            "Reguły przykładowe:\r\n" +
+            "- Wymiana oleju i filtrów wymaga przeglądu klasyka.\r\n" +
+            "- Pakiet garażowania wymaga konserwacji podwozia.\r\n" +
+            "- Przygotowanie do wystawy wymaga detailingu wnętrza i polerowania lakieru.\r\n" +
+            "- Transport lawetą wyklucza pakiet garażowania.";
     }
 
-    private OptionResult ValidateSelectedOptions(Vehicle vehicle)
+    private OptionResult ValidateServiceOptions(Vehicle vehicle, IEnumerable<string> selectedIds)
     {
-        var selected = _optionList?.CheckedItems.Cast<CarOption>().Select(o => o.Id) ?? vehicle.SelectedOptionIds;
-        return new OptionDependencyMediator(_store.Data.Options).Normalize(vehicle, selected);
+        return new OptionDependencyMediator(_store.Data.Options).Normalize(vehicle, selectedIds);
     }
 
-    private PricingResult CalculatePrice(Vehicle vehicle)
+    private static void ShowServiceRuleMessages(OptionResult result)
+    {
+        if (result.Messages.Count == 0) return;
+        MessageBox.Show(
+            $"System automatycznie dostosował pakiet usług:\r\n\r\n{string.Join("\r\n", result.Messages)}",
+            "Reguły pakietu usług");
+    }
+
+    private string ServiceNames(IEnumerable<string> selectedIds)
+    {
+        var names = selectedIds
+            .Select(id => _store.Data.Options.FirstOrDefault(option => option.Id == id)?.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList();
+        return names.Count == 0 ? "brak" : string.Join(", ", names);
+    }
+
+    private PricingResult CalculatePrice(Vehicle vehicle, FinancingKind financing)
     {
         IPriceComponent price = new BaseVehiclePrice(vehicle.BasePrice);
         price = new MarginDecorator(price);
         price = new SeasonalPromotionDecorator(price);
-        price = new FleetDiscountDecorator(price, _fleetBox?.Checked == true);
-        if (_insuranceBox?.Checked == true) price = new InsuranceDecorator(price);
-        if (_warrantyBox?.Checked == true) price = new ExtendedWarrantyDecorator(price);
-        IFinancingStrategy strategy = SelectedFinancing() switch
+        price = new FleetDiscountDecorator(price, false);
+        price = new InsuranceDecorator(price);
+        IFinancingStrategy strategy = financing switch
         {
             FinancingKind.Leasing => new LeasingStrategy(),
             FinancingKind.Credit => new CreditStrategy(),
@@ -948,6 +941,7 @@ public sealed class MainForm : Form
         "FinalPrice" when value is decimal finalPrice => $"{finalPrice:N2} zł",
         "BasePrice" when value is decimal basePrice => $"{basePrice:N2} zł",
         "Mileage" when value is int mileage => $"{mileage:N0} km",
+        "SelectedOptionIds" when value is List<string> optionIds => ServiceNames(optionIds),
         _ => null
     };
 
@@ -1045,11 +1039,13 @@ public sealed class MainForm : Form
                 checkedListBox.ForeColor = ThemeCream;
                 checkedListBox.BorderStyle = BorderStyle.FixedSingle;
                 break;
+            case ListBox listBox:
+                listBox.BackColor = ThemeInk;
+                listBox.ForeColor = ThemeCream;
+                listBox.BorderStyle = BorderStyle.FixedSingle;
+                break;
         }
     }
-
-    private FinancingKind SelectedFinancing() =>
-        _financeBox?.SelectedItem is FinancingKind kind ? kind : FinancingKind.Cash;
 
     private void Save(object? sender, EventArgs e)
     {
