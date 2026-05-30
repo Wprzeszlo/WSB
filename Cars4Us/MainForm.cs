@@ -174,7 +174,6 @@ public sealed class MainForm : Form
         panel.Controls.Add(Button("Dodaj auto old time", AddVehicle));
         panel.Controls.Add(Button("Modyfikuj pojazd", EditVehicle));
         panel.Controls.Add(Button("Usuń pojazd", DeleteVehicle));
-        panel.Controls.Add(Button("Zmień status", AdvanceVehicleState));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_vehicleGrid);
         page.Controls.Add(panel);
@@ -363,16 +362,6 @@ public sealed class MainForm : Form
         }
         _store.Data.Vehicles.Add(dialog.Vehicle);
         _notifier.Publish($"Dodano pojazd: {dialog.Vehicle.Brand} {dialog.Vehicle.Model}, VIN {dialog.Vehicle.Vin}.");
-        RefreshBindings();
-    }
-
-    private void AdvanceVehicleState(object? sender, EventArgs e)
-    {
-        var vehicle = SelectedVehicle();
-        if (vehicle is null) return;
-        var state = VehicleStateFactory.From(vehicle.StateName);
-        vehicle.StateName = state.Next();
-        _notifier.Publish($"Status VIN {vehicle.Vin}: {vehicle.StateName}.");
         RefreshBindings();
     }
 
