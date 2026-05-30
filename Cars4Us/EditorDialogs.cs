@@ -37,11 +37,11 @@ public sealed class VehicleEditorDialog : Form
         _vin.Text = vehicle.Vin;
         _brand.Text = vehicle.Brand;
         _model.Text = vehicle.Model;
-        _engine.SelectedItem = vehicle.Engine;
-        _gearbox.SelectedItem = vehicle.Gearbox;
+        SelectEnumValue(_engine, vehicle.Engine);
+        SelectEnumValue(_gearbox, vehicle.Gearbox);
         _mileage.Value = Math.Clamp(vehicle.Mileage, (int)_mileage.Minimum, (int)_mileage.Maximum);
         _price.Value = Math.Clamp(vehicle.BasePrice, _price.Minimum, _price.Maximum);
-        _availability.SelectedItem = vehicle.Availability;
+        SelectEnumValue(_availability, vehicle.Availability);
         _testDrive.Checked = vehicle.IsTestDriveCar;
     }
 
@@ -195,7 +195,7 @@ public sealed class EmployeeEditorDialog : Form
         Text = "Modyfikacja pracownika";
         SetPrimaryButtonText(this, "Zapisz zmiany");
         _name.Text = employee.Name;
-        _role.SelectedItem = employee.Role;
+        SelectEnumValue(_role, employee.Role);
     }
 
     public Employee Employee => new() { Name = _name.Text.Trim(), Role = (EmployeeRole)_role.SelectedItem! };
@@ -257,9 +257,9 @@ public sealed class TestDriveEditorDialog : Form
         if (testDrive is null) return;
         Text = "Modyfikacja jazdy próbnej";
         SetPrimaryButtonText(this, "Zapisz zmiany");
-        _vehicle.SelectedItem = vehicleList.FirstOrDefault(v => v.Vin == testDrive.VehicleVin);
-        _customer.SelectedItem = customerList.FirstOrDefault(c => c.Id == testDrive.CustomerId);
-        _salesperson.SelectedItem = salespersonList.FirstOrDefault(e => e.Id == testDrive.SalespersonId);
+        SelectComboItem(_vehicle, vehicleList.FirstOrDefault(v => v.Vin == testDrive.VehicleVin));
+        SelectComboItem(_customer, customerList.FirstOrDefault(c => c.Id == testDrive.CustomerId));
+        SelectComboItem(_salesperson, salespersonList.FirstOrDefault(e => e.Id == testDrive.SalespersonId));
         _start.Value = testDrive.Start;
         _duration.Value = Math.Clamp((decimal)(testDrive.End - testDrive.Start).TotalMinutes, _duration.Minimum, _duration.Maximum);
         _notes.Text = testDrive.Notes;
@@ -346,10 +346,10 @@ public sealed class SaleEditorDialog : Form
         if (transaction is null) return;
         Text = "Modyfikacja transakcji";
         SetPrimaryButtonText(this, "Zapisz zmiany");
-        _vehicle.SelectedItem = vehicleList.FirstOrDefault(v => v.Vin == transaction.VehicleVin);
-        _customer.SelectedItem = customerList.FirstOrDefault(c => c.Id == transaction.CustomerId);
-        _salesperson.SelectedItem = salespersonList.FirstOrDefault(e => e.Id == transaction.SalespersonId);
-        _financing.SelectedItem = transaction.Financing;
+        SelectComboItem(_vehicle, vehicleList.FirstOrDefault(v => v.Vin == transaction.VehicleVin));
+        SelectComboItem(_customer, customerList.FirstOrDefault(c => c.Id == transaction.CustomerId));
+        SelectComboItem(_salesperson, salespersonList.FirstOrDefault(e => e.Id == transaction.SalespersonId));
+        SelectEnumValue(_financing, transaction.Financing);
     }
 
     public Vehicle Vehicle => (Vehicle)_vehicle.SelectedItem!;
@@ -506,6 +506,31 @@ internal static class DialogHelpers
                 return;
             }
             SetPrimaryButtonText(control, text);
+        }
+    }
+
+    public static void SelectComboItem<T>(ComboBox combo, T? item) where T : class
+    {
+        if (item is null) return;
+        for (var i = 0; i < combo.Items.Count; i++)
+        {
+            if (ReferenceEquals(combo.Items[i], item))
+            {
+                combo.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    public static void SelectEnumValue<TEnum>(ComboBox combo, TEnum value) where TEnum : struct, Enum
+    {
+        for (var i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is TEnum item && EqualityComparer<TEnum>.Default.Equals(item, value))
+            {
+                combo.SelectedIndex = i;
+                return;
+            }
         }
     }
 }
