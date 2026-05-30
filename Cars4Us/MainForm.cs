@@ -197,7 +197,7 @@ public sealed class MainForm : Form
     {
         var page = new TabPage("Pakiet usług");
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 380 };
-        _optionCatalog = new ListBox { Dock = DockStyle.Fill };
+        _optionCatalog = new ListBox { Dock = DockStyle.Fill, SelectionMode = SelectionMode.MultiExtended };
         _optionCatalog.SelectedIndexChanged += (_, _) => ShowServiceCatalogInfo();
         _pricingBox = new TextBox { Multiline = true, Dock = DockStyle.Fill, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
         split.Panel1.Controls.Add(_optionCatalog);
@@ -748,11 +748,11 @@ public sealed class MainForm : Form
     private void ShowServiceCatalogInfo()
     {
         if (_pricingBox is null) return;
-        var option = _optionCatalog?.SelectedItem as CarOption;
+        var selectedOptions = _optionCatalog?.SelectedItems.Cast<CarOption>().ToList() ?? new List<CarOption>();
         var vehicle = SelectedVehicle();
         var quote = vehicle is null
             ? "Wybierz pojazd w zakładce „Pojazdy”, aby zobaczyć poglądową cenę z usługą."
-            : BuildInformationalServiceQuote(vehicle, option);
+            : BuildInformationalServiceQuote(vehicle, selectedOptions);
 
         _pricingBox.Text =
             "Katalog usług old time\r\n\r\n" +
@@ -765,24 +765,29 @@ public sealed class MainForm : Form
             "- Transport lawetą wyklucza pakiet garażowania.";
     }
 
-    private string BuildInformationalServiceQuote(Vehicle vehicle, CarOption? option)
+    private string BuildInformationalServiceQuote(Vehicle vehicle, List<CarOption> options)
     {
         var pricing = CalculatePrice(vehicle, FinancingKind.Cash);
-        var optionCost = option?.Price ?? 0m;
-        var optionLine = option is null
+        var optionCost = options.Sum(option => option.Price);
+        var selectedIds = options.Select(option => option.Id).ToList();
+        var optionLine = options.Count == 0
             ? "Wybrana usługa: brak"
-            : $"Wybrana usługa: {option.Name}\r\nKoszt usługi: {option.Price:N2} zł";
-        var dependencies = option is null
+            : $"Wybrane usługi:\r\n- {string.Join("\r\n- ", options.Select(option => $"{option.Name} ({option.Price:N2} zł)"))}\r\nKoszt usług: {optionCost:N2} zł";
+        var dependencies = options.Count == 0
             ? ""
-            : $"\r\nWymaga: {ServiceNames(option.Requires)}\r\nWyklucza: {ServiceNames(option.Excludes)}";
+            : $"\r\nWymaga: {ServiceNames(options.SelectMany(option => option.Requires).Distinct())}\r\nWyklucza: {ServiceNames(options.SelectMany(option => option.Excludes).Distinct())}";
+        var validation = options.Count == 0
+            ? ""
+            : $"\r\nUsługi po regułach: {ServiceNames(ValidateServiceOptions(vehicle, selectedIds).SelectedIds)}";
 
         return
             $"Auto: {vehicle.Brand} {vehicle.Model}, VIN {vehicle.Vin}\r\n" +
             optionLine +
-            dependencies + "\r\n\r\n" +
+            dependencies +
+            validation + "\r\n\r\n" +
             $"Cena bazowa: {vehicle.BasePrice:N2} zł\r\n" +
             $"{pricing.Description}\r\n" +
-            $"Poglądowa cena z usługą: {(pricing.Amount + optionCost):N2} zł";
+            $"Poglądowa cena z usługami: {(pricing.Amount + optionCost):N2} zł";
     }
 
     private OptionResult ValidateServiceOptions(Vehicle vehicle, IEnumerable<string> selectedIds)
