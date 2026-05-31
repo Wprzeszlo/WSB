@@ -1192,8 +1192,8 @@ public sealed class MainForm : Form
     private static FlowLayoutPanel TopPanel() => new()
     {
         Dock = DockStyle.Top,
-        Height = 46,
-        Padding = new Padding(8),
+        Height = 58,
+        Padding = new Padding(12, 10, 12, 10),
         FlowDirection = FlowDirection.LeftToRight,
         BackColor = ThemeCream,
         ForeColor = ThemeInk
@@ -1205,9 +1205,10 @@ public sealed class MainForm : Form
         {
             Text = text,
             AutoSize = true,
-            Height = 30,
-            Margin = new Padding(4),
-            Padding = new Padding(10, 2, 10, 2),
+            Height = 36,
+            MinimumSize = new Size(0, 36),
+            Margin = new Padding(4, 0, 4, 0),
+            Padding = new Padding(12, 5, 12, 5),
             FlatStyle = FlatStyle.Flat,
             BackColor = ThemeInk,
             ForeColor = ThemeCream
