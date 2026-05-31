@@ -16,7 +16,7 @@ public sealed class MainForm : Form
     private static readonly Color ThemeGoldSoft = Color.FromArgb(218, 199, 160);
     private static readonly Color ThemeGridLine = Color.FromArgb(82, 101, 107);
     private static readonly Color ThemeSelection = Color.FromArgb(117, 99, 64);
-    private static readonly Size ToolbarButtonSize = new(250, 40);
+    private static readonly Size ToolbarButtonSize = new(220, 52);
 
     private readonly JsonDataStore _store;
     private readonly InventoryNotifier _notifier = new();
@@ -1193,7 +1193,7 @@ public sealed class MainForm : Form
     private static FlowLayoutPanel TopPanel() => new()
     {
         Dock = DockStyle.Top,
-        Height = 64,
+        Height = 76,
         Padding = new Padding(12),
         FlowDirection = FlowDirection.LeftToRight,
         BackColor = ThemeCream,
@@ -1210,7 +1210,7 @@ public sealed class MainForm : Form
             MinimumSize = ToolbarButtonSize,
             MaximumSize = ToolbarButtonSize,
             Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(12, 6, 12, 6),
+            Padding = new Padding(10, 8, 10, 8),
             TextAlign = ContentAlignment.MiddleCenter,
             FlatStyle = FlatStyle.Flat,
             BackColor = ThemeInk,
