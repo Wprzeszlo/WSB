@@ -175,8 +175,8 @@ public sealed class MainForm : Form
         _vehicleGrid = Grid();
         _vehicleGrid.DataSource = _vehicles;
         var panel = TopPanel();
-        panel.Controls.Add(Button("Dodaj auto old time", AddVehicle));
-        panel.Controls.Add(Button("Modyfikuj pojazd", EditVehicle));
+        panel.Controls.Add(Button("Dodaj auto", AddVehicle));
+        panel.Controls.Add(Button("Modyfikuj", EditVehicle));
         panel.Controls.Add(Button("Usuń pojazd", DeleteVehicle));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_vehicleGrid);
