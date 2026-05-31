@@ -16,6 +16,7 @@ public sealed class MainForm : Form
     private static readonly Color ThemeGoldSoft = Color.FromArgb(218, 199, 160);
     private static readonly Color ThemeGridLine = Color.FromArgb(82, 101, 107);
     private static readonly Color ThemeSelection = Color.FromArgb(117, 99, 64);
+    private static readonly Size ToolbarButtonSize = new(250, 40);
 
     private readonly JsonDataStore _store;
     private readonly InventoryNotifier _notifier = new();
@@ -138,7 +139,7 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             DrawMode = TabDrawMode.OwnerDrawFixed,
-            ItemSize = new Size(150, 30),
+            ItemSize = new Size(210, 32),
             SizeMode = TabSizeMode.Fixed
         };
         tabs.DrawItem += DrawThemeTab;
@@ -1192,8 +1193,8 @@ public sealed class MainForm : Form
     private static FlowLayoutPanel TopPanel() => new()
     {
         Dock = DockStyle.Top,
-        Height = 58,
-        Padding = new Padding(12, 10, 12, 10),
+        Height = 64,
+        Padding = new Padding(12),
         FlowDirection = FlowDirection.LeftToRight,
         BackColor = ThemeCream,
         ForeColor = ThemeInk
@@ -1204,11 +1205,13 @@ public sealed class MainForm : Form
         var button = new Button
         {
             Text = text,
-            AutoSize = true,
-            Height = 36,
-            MinimumSize = new Size(0, 36),
+            AutoSize = false,
+            Size = ToolbarButtonSize,
+            MinimumSize = ToolbarButtonSize,
+            MaximumSize = ToolbarButtonSize,
             Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(12, 5, 12, 5),
+            Padding = new Padding(12, 6, 12, 6),
+            TextAlign = ContentAlignment.MiddleCenter,
             FlatStyle = FlatStyle.Flat,
             BackColor = ThemeInk,
             ForeColor = ThemeCream
