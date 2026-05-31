@@ -1210,8 +1210,9 @@ public sealed class MainForm : Form
             MinimumSize = ToolbarButtonSize,
             MaximumSize = ToolbarButtonSize,
             Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(10, 8, 10, 8),
+            Padding = new Padding(8, 0, 8, 0),
             TextAlign = ContentAlignment.MiddleCenter,
+            UseCompatibleTextRendering = true,
             FlatStyle = FlatStyle.Flat,
             BackColor = ThemeInk,
             ForeColor = ThemeCream
