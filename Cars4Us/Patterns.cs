@@ -1,5 +1,9 @@
 namespace Cars4Us;
 
+// WZORZEC: Builder
+// CarBuilder tworzy obiekt Vehicle krok po kroku, bez ogromnego konstruktora
+// z wieloma parametrami. Przydaje się przy autach, bo pojazd ma dużo pól:
+// VIN, marka, model, silnik, skrzynia, przebieg, cena, dostępność i opcje.
 public sealed class CarBuilder
 {
     private readonly Vehicle _vehicle = new();
@@ -12,6 +16,9 @@ public sealed class CarBuilder
     public Vehicle Build() => _vehicle;
 }
 
+// WZORZEC: Composite
+// Wspólny interfejs pozwala traktować pojedynczą usługę i pakiet usług tak samo.
+// Dzięki temu można budować pakiety z wielu elementów bez zmiany kodu klienta.
 public interface IOptionComposite
 {
     string Name { get; }
@@ -19,6 +26,8 @@ public interface IOptionComposite
     IEnumerable<string> OptionIds { get; }
 }
 
+// WZORZEC: Composite - liść
+// OptionLeaf reprezentuje pojedynczą usługę z katalogu, np. przegląd klasyka.
 public sealed class OptionLeaf : IOptionComposite
 {
     private readonly CarOption _option;
@@ -28,6 +37,9 @@ public sealed class OptionLeaf : IOptionComposite
     public IEnumerable<string> OptionIds => new[] { _option.Id };
 }
 
+// WZORZEC: Composite - kompozyt
+// OptionPackage może zawierać wiele usług lub innych elementów kompozytu.
+// Cena pakietu jest liczona z elementów wewnętrznych, tutaj z rabatem pakietowym.
 public sealed class OptionPackage : IOptionComposite
 {
     private readonly List<IOptionComposite> _items = new();
@@ -38,6 +50,10 @@ public sealed class OptionPackage : IOptionComposite
     public OptionPackage Add(IOptionComposite item) { _items.Add(item); return this; }
 }
 
+// WZORZEC: Mediator
+// OptionDependencyMediator centralizuje reguły zależności między usługami.
+// Zamiast rozrzucać if-else po formularzach, jeden mediator sprawdza Requires/Excludes
+// i zwraca poprawioną listę usług oraz komunikaty dla użytkownika.
 public sealed class OptionDependencyMediator
 {
     private readonly IReadOnlyList<CarOption> _options;
@@ -77,24 +93,30 @@ public sealed class OptionDependencyMediator
 
 public sealed record OptionResult(List<string> SelectedIds, List<string> Messages);
 
+// WZORZEC: Strategy
+// IFinancingStrategy definiuje wspólny kontrakt dla różnych modeli finansowania.
+// Dzięki temu gotówka, leasing i kredyt mogą mieć własny algorytm wyceny.
 public interface IFinancingStrategy
 {
     string Name { get; }
     PricingResult Calculate(decimal amount);
 }
 
+// WZORZEC: Strategy - strategia płatności gotówką.
 public sealed class CashStrategy : IFinancingStrategy
 {
     public string Name => "Gotówka";
     public PricingResult Calculate(decimal amount) => new(amount * 0.985m, "Rabat 1,5% za płatność gotówką.");
 }
 
+// WZORZEC: Strategy - strategia leasingu.
 public sealed class LeasingStrategy : IFinancingStrategy
 {
     public string Name => "Leasing";
     public PricingResult Calculate(decimal amount) => new(amount * 1.035m, "Leasing: opłata przygotowawcza i preferencyjne ubezpieczenie.");
 }
 
+// WZORZEC: Strategy - strategia kredytu.
 public sealed class CreditStrategy : IFinancingStrategy
 {
     public string Name => "Kredyt";
@@ -103,6 +125,9 @@ public sealed class CreditStrategy : IFinancingStrategy
 
 public sealed record PricingResult(decimal Amount, string Description);
 
+// Pomocniczy kalkulator dla usługi transportu lawetą.
+// Nie jest osobnym wzorcem, ale wspiera Pricing Pipeline, bo transport ma cenę zależną
+// od dystansu i typu trasy.
 public static class TransportPricing
 {
     public const string OptionId = "covered-transport";
@@ -126,12 +151,16 @@ public static class TransportPricing
     };
 }
 
+// WZORZEC: Decorator
+// IPriceComponent jest bazą dla potoku wyceny. Każdy dekorator zachowuje ten sam
+// interfejs, więc można dynamicznie dokładać marżę, promocję, zniżkę lub ubezpieczenie.
 public interface IPriceComponent
 {
     decimal Calculate();
     string Describe();
 }
 
+// WZORZEC: Decorator - komponent bazowy, czyli cena pojazdu przed dodatkami.
 public sealed class BaseVehiclePrice : IPriceComponent
 {
     private readonly decimal _basePrice;
@@ -140,6 +169,8 @@ public sealed class BaseVehiclePrice : IPriceComponent
     public string Describe() => $"Cena bazowa: {_basePrice:C0}";
 }
 
+// WZORZEC: Decorator - klasa bazowa dekoratorów ceny.
+// Przechowuje referencję do poprzedniego elementu potoku wyceny.
 public abstract class PriceDecorator : IPriceComponent
 {
     protected readonly IPriceComponent Inner;
@@ -148,6 +179,7 @@ public abstract class PriceDecorator : IPriceComponent
     public abstract string Describe();
 }
 
+// WZORZEC: Decorator - dodaje marżę salonu.
 public sealed class MarginDecorator : PriceDecorator
 {
     public MarginDecorator(IPriceComponent inner) : base(inner) { }
@@ -155,6 +187,7 @@ public sealed class MarginDecorator : PriceDecorator
     public override string Describe() => $"{Inner.Describe()}\r\nMarża salonu: +7%";
 }
 
+// WZORZEC: Decorator - odejmuje sezonową promocję.
 public sealed class SeasonalPromotionDecorator : PriceDecorator
 {
     public SeasonalPromotionDecorator(IPriceComponent inner) : base(inner) { }
@@ -162,6 +195,7 @@ public sealed class SeasonalPromotionDecorator : PriceDecorator
     public override string Describe() => $"{Inner.Describe()}\r\nPromocja sezonowa: -3 500 zł";
 }
 
+// WZORZEC: Decorator - opcjonalna zniżka flotowa.
 public sealed class FleetDiscountDecorator : PriceDecorator
 {
     private readonly bool _enabled;
@@ -170,6 +204,7 @@ public sealed class FleetDiscountDecorator : PriceDecorator
     public override string Describe() => _enabled ? $"{Inner.Describe()}\r\nZniżka flotowa: -4%" : Inner.Describe();
 }
 
+// WZORZEC: Decorator - dolicza koszt ubezpieczenia.
 public sealed class InsuranceDecorator : PriceDecorator
 {
     public InsuranceDecorator(IPriceComponent inner) : base(inner) { }
@@ -177,6 +212,7 @@ public sealed class InsuranceDecorator : PriceDecorator
     public override string Describe() => $"{Inner.Describe()}\r\nUbezpieczenie: +4 200 zł";
 }
 
+// WZORZEC: Decorator - dolicza koszt przedłużonej gwarancji.
 public sealed class ExtendedWarrantyDecorator : PriceDecorator
 {
     public ExtendedWarrantyDecorator(IPriceComponent inner) : base(inner) { }
@@ -184,6 +220,9 @@ public sealed class ExtendedWarrantyDecorator : PriceDecorator
     public override string Describe() => $"{Inner.Describe()}\r\nPrzedłużona gwarancja: +5 900 zł";
 }
 
+// WZORZEC: State
+// IVehicleState opisuje stan pojazdu i odpowiada na pytanie, czy auto można rezerwować.
+// Status pojazdu wynika z procesu sprzedaży, a nie z ręcznego wpisywania w tabeli.
 public interface IVehicleState
 {
     string Name { get; }
@@ -191,12 +230,14 @@ public interface IVehicleState
     string Next();
 }
 
+// WZORZEC: State - konkretne stany cyklu życia pojazdu.
 public sealed class InTransportState : IVehicleState { public string Name => "W transporcie"; public bool CanReserve => false; public string Next() => "Na ekspozycji"; }
 public sealed class OnDisplayState : IVehicleState { public string Name => "Na ekspozycji"; public bool CanReserve => true; public string Next() => "Zarezerwowane"; }
 public sealed class ReservedState : IVehicleState { public string Name => "Zarezerwowane"; public bool CanReserve => false; public string Next() => "Sprzedane"; }
 public sealed class SoldState : IVehicleState { public string Name => "Sprzedane"; public bool CanReserve => false; public string Next() => "Wydane"; }
 public sealed class ReleasedState : IVehicleState { public string Name => "Wydane"; public bool CanReserve => false; public string Next() => "Wydane"; }
 
+// WZORZEC: State - fabryka odtwarza obiekt stanu na podstawie nazwy zapisanej w danych.
 public static class VehicleStateFactory
 {
     public static IVehicleState From(string name) => name switch
@@ -209,8 +250,12 @@ public static class VehicleStateFactory
     };
 }
 
+// WZORZEC: Observer
+// Obserwator pozwala reagować na zdarzenia bez silnego powiązania modułów.
+// Sprzedaż publikuje komunikat, a NotificationLogObserver dopisuje go do listy powiadomień.
 public interface IInventoryObserver { void Notify(string message); }
 
+// WZORZEC: Observer - podmiot obserwowany, który rozsyła powiadomienia.
 public sealed class InventoryNotifier
 {
     private readonly List<IInventoryObserver> _observers = new();
@@ -218,6 +263,7 @@ public sealed class InventoryNotifier
     public void Publish(string message) { foreach (var observer in _observers) observer.Notify(message); }
 }
 
+// WZORZEC: Observer - konkretny obserwator zapisujący komunikaty w danych aplikacji.
 public sealed class NotificationLogObserver : IInventoryObserver
 {
     private readonly DealershipData _data;
@@ -225,12 +271,19 @@ public sealed class NotificationLogObserver : IInventoryObserver
     public void Notify(string message) => _data.Notifications.Insert(0, $"{DateTime.Now:g}: {message}");
 }
 
+// WZORZEC: Command
+// Komenda opisuje operację na transakcji jako osobny obiekt z metodami Execute i Undo.
 public interface ITransactionCommand
 {
     void Execute();
     void Undo();
 }
 
+// WZORCE: Command + Memento
+// AdvanceTransactionCommand wykonuje przejście do kolejnego etapu transakcji.
+// Przed zmianą tworzy TransactionSnapshot, czyli memento poprzedniego stanu:
+// etap transakcji, status auta i prowizję pracownika. Dzięki temu można bezpiecznie
+// odtworzyć wcześniejszy stan przy operacji Undo lub wycofaniu procesu.
 public sealed class AdvanceTransactionCommand : ITransactionCommand
 {
     private readonly SaleTransaction _transaction;
@@ -279,6 +332,9 @@ public sealed class AdvanceTransactionCommand : ITransactionCommand
     }
 }
 
+// WZORZEC: Facade
+// SalesFacade upraszcza proces sprzedaży. Formularz nie musi znać wszystkich szczegółów:
+// rezerwacji auta, tworzenia transakcji, naliczania prowizji i publikowania powiadomień.
 public sealed class SalesFacade
 {
     private readonly DealershipData _data;
