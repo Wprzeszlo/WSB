@@ -16,7 +16,7 @@ public sealed class MainForm : Form
     private static readonly Color ThemeGoldSoft = Color.FromArgb(218, 199, 160);
     private static readonly Color ThemeGridLine = Color.FromArgb(82, 101, 107);
     private static readonly Color ThemeSelection = Color.FromArgb(117, 99, 64);
-    private static readonly Size ToolbarButtonSize = new(220, 52);
+    private static readonly Size ToolbarButtonSize = new(180, 52);
 
     private readonly JsonDataStore _store;
     private readonly InventoryNotifier _notifier = new();
@@ -177,7 +177,7 @@ public sealed class MainForm : Form
         var panel = TopPanel();
         panel.Controls.Add(Button("Dodaj auto", AddVehicle));
         panel.Controls.Add(Button("Modyfikuj", EditVehicle));
-        panel.Controls.Add(Button("Usuń pojazd", DeleteVehicle));
+        panel.Controls.Add(Button("Usuń", DeleteVehicle));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_vehicleGrid);
         page.Controls.Add(panel);
@@ -190,10 +190,10 @@ public sealed class MainForm : Form
         _customerGrid = Grid();
         _customerGrid.DataSource = _customers;
         var panel = TopPanel();
-        panel.Controls.Add(Button("Dodaj klienta", AddCustomer));
-        panel.Controls.Add(Button("Modyfikuj klienta", EditCustomer));
-        panel.Controls.Add(Button("Usuń klienta", DeleteCustomer));
-        panel.Controls.Add(Button("Historia klienta", ShowCustomerHistory));
+        panel.Controls.Add(Button("Dodaj", AddCustomer));
+        panel.Controls.Add(Button("Modyfikuj", EditCustomer));
+        panel.Controls.Add(Button("Usuń", DeleteCustomer));
+        panel.Controls.Add(Button("Historia", ShowCustomerHistory));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_customerGrid);
         page.Controls.Add(panel);
@@ -234,9 +234,9 @@ public sealed class MainForm : Form
         _testDriveGrid = Grid();
         _testDriveGrid.DataSource = _testDrives;
         var panel = TopPanel();
-        panel.Controls.Add(Button("Zarezerwuj jazdę", AddTestDrive));
-        panel.Controls.Add(Button("Modyfikuj jazdę", EditTestDrive));
-        panel.Controls.Add(Button("Usuń rezerwację", DeleteTestDrive));
+        panel.Controls.Add(Button("Zarezerwuj", AddTestDrive));
+        panel.Controls.Add(Button("Modyfikuj", EditTestDrive));
+        panel.Controls.Add(Button("Usuń", DeleteTestDrive));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_testDriveGrid);
         page.Controls.Add(panel);
@@ -249,12 +249,12 @@ public sealed class MainForm : Form
         _transactionGrid = Grid();
         _transactionGrid.DataSource = _transactions;
         var panel = TopPanel();
-        panel.Controls.Add(Button("Rozpocznij sprzedaż", StartSale));
-        panel.Controls.Add(Button("Modyfikuj transakcję", EditSale));
-        panel.Controls.Add(Button("Następny etap", AdvanceSale));
-        panel.Controls.Add(Button("Dokument wydania", GenerateReleaseDocument));
+        panel.Controls.Add(Button("Rozpocznij", StartSale));
+        panel.Controls.Add(Button("Modyfikuj", EditSale));
+        panel.Controls.Add(Button("Etap", AdvanceSale));
+        panel.Controls.Add(Button("Dokument", GenerateReleaseDocument));
         panel.Controls.Add(Button("Wycofaj", WithdrawSale));
-        panel.Controls.Add(Button("Usuń transakcję", DeleteSale));
+        panel.Controls.Add(Button("Usuń", DeleteSale));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_transactionGrid);
         page.Controls.Add(panel);
@@ -272,9 +272,9 @@ public sealed class MainForm : Form
         split.Panel1.Controls.Add(_employeeGrid);
         split.Panel2.Controls.Add(_notificationGrid);
         var panel = TopPanel();
-        panel.Controls.Add(Button("Dodaj pracownika", AddEmployee));
-        panel.Controls.Add(Button("Modyfikuj pracownika", EditEmployee));
-        panel.Controls.Add(Button("Usuń pracownika", DeleteEmployee));
+        panel.Controls.Add(Button("Dodaj", AddEmployee));
+        panel.Controls.Add(Button("Modyfikuj", EditEmployee));
+        panel.Controls.Add(Button("Usuń", DeleteEmployee));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(split);
         page.Controls.Add(panel);
@@ -296,7 +296,7 @@ public sealed class MainForm : Form
         }, "Id", "PayloadJson");
         var panel = TopPanel();
         panel.Controls.Add(Button("Przywróć", RestoreDeletedRecord));
-        panel.Controls.Add(Button("Wyczyść wygasłe", PurgeExpiredDeletedRecords));
+        panel.Controls.Add(Button("Wyczyść", PurgeExpiredDeletedRecords));
         panel.Controls.Add(Button("Zapisz", Save));
         page.Controls.Add(_deletedRecordGrid);
         page.Controls.Add(panel);
